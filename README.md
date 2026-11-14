@@ -13,6 +13,8 @@ for the test region Argentina:
 - `docs/HARMONIZATION_REPORT.md`: data, methods, metrics, limitations
 - `data/harmonized/`: the harmonized monthly calendar and the validation tables
 - `docs/figures/`: figures used in the report
+- `docs/index.html`, `docs/app/`: the calendar web app
+- `scripts/build_app_data.py`: packs the harmonized data for the web app
 
 ## How to reproduce
 
@@ -40,6 +42,33 @@ python scripts/harmonize.py --region Argentina
 3. `harmonize.py` runs the validation, writes `data/harmonized/` and `docs/figures/`.
 
 `data/raw/` and `data/processed/` are not committed; they are rebuilt by steps 1 and 2.
+
+## Web app
+
+`docs/` contains the calendar as a static web app (no build step, no external requests):
+`docs/index.html`, `docs/app/app.js`, `docs/app/style.css` and the packed data in
+`docs/app/data/`. It offers a map to select an area (drag a box or type its edges), the
+harmonized calendar with year totals and the median of every calendar month, a comparison
+of any month with the median of its calendar month, a switch to the raw sensor counts, and
+CSV downloads for the selection.
+
+Run it locally:
+
+```bash
+python -m http.server 8000 --directory docs
+```
+
+Then open http://localhost:8000. To publish it, enable GitHub Pages for the `docs/` folder
+of the default branch (repository Settings, Pages, "Deploy from a branch").
+
+After a new harmonization run, repack the app data:
+
+```bash
+python scripts/build_app_data.py --region Argentina
+```
+
+Known gaps of the demo: one region (Argentina), archive ends 2025-12 (no current month yet),
+downloads contain counts per cell and month, not the individual hot-spot records.
 
 ## Data acknowledgement
 
