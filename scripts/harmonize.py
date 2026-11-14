@@ -189,6 +189,16 @@ def panel(prep: dict, variant: str, t_idx: np.ndarray, cellmask: np.ndarray):
 
 
 # ------------------------------------------------------------------------ methods
+CLIP_LOG: list[tuple[int, float, float]] = []   # (n clipped, max raw prediction, cap) per M1 fit
+
+
+def clip_stats(start: int) -> dict:
+    part = CLIP_LOG[start:]
+    return {"m1_fits": len(part), "cell_predictions_clipped": int(sum(p[0] for p in part)),
+            "max_raw_cell_prediction": float(max((p[1] for p in part), default=0.0)),
+            "min_cap": float(min((p[2] for p in part), default=0.0))}
+
+
 def fit_predict(method: str, Xtr, ytr, btr, ttr, Xte, bte, tte) -> np.ndarray:
     if method == "B0":
         return (ytr.sum() / btr.sum()) * bte
@@ -201,7 +211,13 @@ def fit_predict(method: str, Xtr, ytr, btr, ttr, Xte, bte, tte) -> np.ndarray:
     if method == "M1":
         model = HistGradientBoostingRegressor(**HGB_PARAMS)
         model.fit(Xtr, ytr)
-        return model.predict(Xte)
+        pred = model.predict(Xte)
+        # Range guard: with a log link, a rare feature combination can produce an absurd
+        # cell value (seen once: 353,020 predicted for a cell-month with 351 observed).
+        # A cell prediction may never exceed the largest target value seen in training.
+        cap = float(ytr.max())
+        CLIP_LOG.append((int((pred > cap).sum()), float(pred.max()), cap))
+        return np.minimum(pred, cap)
     raise ValueError(method)
 
 
@@ -240,6 +256,7 @@ def loyo(prep: dict, variant: str, cellmask: np.ndarray, modis_cellmask: np.ndar
     years = MONTH_YEAR[rows_t]
     in_modis_cell = np.tile(modis_cellmask[cellmask], len(t_idx))
     oos = {m: np.zeros(len(y)) for m in methods}
+    clip_start = len(CLIP_LOG)
     for yr in range(OVERLAP_START[0], Y1 + 1):
         te = years == yr
         tr = ~te
@@ -253,7 +270,7 @@ def loyo(prep: dict, variant: str, cellmask: np.ndarray, modis_cellmask: np.ndar
     out = {"variant": variant, "features": names, "n_rows": int(len(y)),
            "n_cells": int(cellmask.sum()), "n_months": int(len(t_idx)),
            "obs": obs, "series": {}, "per_year": [], "summary": {}, "n20": {},
-           "cell_oos": oos, "rows_t": rows_t, "y": y}
+           "cell_oos": oos, "rows_t": rows_t, "y": y, "range_guard": clip_stats(clip_start)}
     flags_obs = above_median_flags(obs, t_idx)
     t_n20 = np.arange(T_N20, T)
     flags_n20 = above_median_flags(n20, t_n20)
@@ -462,7 +479,7 @@ def fig_step(region, terra, modis, monthly: pd.DataFrame, out: Path):
     a.set_ylabel("raw hotspots per month", color=INK2, fontsize=9)
     a.set_title(f"{region}: the 2002 step. Before: raw MODIS counts jump when Aqua joins",
                 loc="left", color=INK, fontsize=12, fontweight="bold")
-    a.legend(frameon=False, fontsize=9, ncol=2, loc="upper left", labelcolor=INK2)
+    a.legend(frameon=False, fontsize=9, ncol=1, loc="upper left", labelcolor=INK2)
     h = monthly.iloc[t]
     b.fill_between(d, h["lower"], h["upper"], color=C_HARM, alpha=0.18, linewidth=0,
                    label="90 % interval (out-of-sample residuals)")
@@ -494,7 +511,7 @@ def to_native(o):
 
 def strip(res: dict) -> dict:
     return {k: v for k, v in res.items() if k in ("variant", "features", "n_rows", "n_cells",
-                                                   "n_months", "summary", "n20")}
+                                                   "n_months", "summary", "n20", "range_guard")}
 
 
 def main() -> int:
@@ -632,6 +649,7 @@ def main() -> int:
 
     # final models: train on the whole overlap, predict 2000-11 .. 2012-01 --------------
     print("final fit and back-prediction ...", flush=True)
+    clip_final = len(CLIP_LOG)
     harm = reg["S-NPP"].copy()
     lower = harm.copy()
     upper = harm.copy()
@@ -680,6 +698,8 @@ def main() -> int:
         "terra_first_detection": str(pts.loc[pts["satellite"] == "Terra", "acq_datetime_utc"].min()),
     })
     tm = np.arange(0, T_OV0)
+    M["range_guard_final"] = clip_stats(clip_final)
+    M["max_cell_value_modeled_period"] = float(cell_harm[:T_OV0].max())
     M["pred_panel_check"] = {
         "modeled_total_modis_cells": float(alt["modis_cells"][tm].sum()),
         "modeled_total_union_cells": float(alt["union_cells"][tm].sum()),
