@@ -1,3 +1,6 @@
 # FIRMS-Rohdaten (GB-Bereich, einzelne Dateien > 100 MiB) – per Skript nachladen, nie committen
 data/raw/
 *.zip
+
+# Secrets (z. B. FIRMS_MAP_KEY) – nie committen
+.env

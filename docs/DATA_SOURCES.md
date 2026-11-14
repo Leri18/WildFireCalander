@@ -12,16 +12,16 @@ Sie besteht aus zwei Teilen:
 
 | Anforderung (offizieller Text) | Datenbedarf | Bezugsweg |
 |---|---|---|
-| Hotspot-Anzahl *„from the early 2000s to the present“* | MODIS ab 11/2000 bis heute, VIIRS ab 2012 | SP-Jahresarchiv (bis 2025) plus API für 2026 |
+| Hotspot-Anzahl *„from the early 2000s to the present“* | MODIS ab 11/2000 bis heute, VIIRS ab 2012 | SP-Jahresarchiv bis 2025. 2026 kommt über die API: SP bis Ende Juli bzw. August, danach NRT (siehe Abschnitt 2). |
 | *„compare the burning activity of the current month against the historical median“* | der **komplette laufende Monat** als NRT | API `area` mit `*_NRT` (5 Tage pro Request) oder `nrt3` (2 Monate, Earthdata Login). Die 7-Tage-Dateien reichen dafür nicht. |
 | Region frei wählen (auf der Karte zeichnen oder Lat/Lon eingeben), dazu einen Zeitraum | räumlich aufgelöste Daten statt Länder-Summen | Punktdaten oder Raster (Zelle × Monat) |
 | *„downloadable CSV File of hot spots detected during a search“* | **Punktdaten** für jede Auswahl | eigene Parquet-Dateien (siehe Abschnitt 4) |
 | aktivste Monate und Jahre; Anomalien gegenüber dem mehrjährigen Mittel | Monatsaggregate pro Region, Median bzw. Mittel über alle Jahre | aus den harmonisierten Daten |
 | Laut Text zählen auch Feuer aus Landwirtschaft, Müllverbrennung und **Industrie** zur „burning activity“. | statische Quellen nicht pauschal entfernen | Feld `type` (nur in SP), siehe Abschnitt 5 |
 
-⚠️ Noch ungeprüft:
-- **Resources-Tab:** Bisher ist nur der Details-Tab gelesen.
-- **CONAE als Autorin:** Die Seite nennt CONAE nur als Bildquelle („Photo credit“).
+**Resources-Tab:** Er nennt als einzige Ressource die FIRMS-Seite auf Earthdata und listet keine Partnerdaten. Alle Zugangswege dieser Seite stehen in Abschnitt 1.
+
+⚠️ Weiter ungeprüft: CONAE als Autorin. Die Seite nennt CONAE nur als Bildquelle („Photo credit“).
 
 Die Seite `www.spaceappschallenge.org` lässt sich aus der Cloud-Umgebung nicht abrufen, weil ihre Zertifikatskette über „AAA Certificate Services“ läuft und dieser Root dort fehlt.
 
@@ -31,7 +31,7 @@ Die Seite `www.spaceappschallenge.org` lässt sich aus der Cloud-Umgebung nicht 
 |---|-----|--------|----------|-------|--------|--------|
 | 1 | **Active Fire Data** (NRT) | Hotspots, weltweit oder für 12 Regionen | nur die letzten 24 h, 48 h oder 7 Tage | nein | CSV, SHP, KML | getestet |
 | 2 | **Country Yearly Summary** (SP) | ein Jahr pro Land und Sensor, Wissenschaftsqualität | MODIS 2000–2025, S-NPP 2012–2025, NOAA-20 2018–2025 | **nein** | CSV, ZIP | getestet |
-| 3 | **API `area`** | Bounding Box oder `world`, 1–5 Tage pro Request, NRT **und** SP | alle Sensoren inkl. NOAA-21 und 2026 | kostenloser MAP_KEY per E-Mail | CSV | nicht getestet |
+| 3 | **API `area`** | Bounding Box oder `world`, 1–5 Tage pro Request, NRT **und** SP | alle Sensoren inkl. NOAA-21 und 2026 | kostenloser MAP_KEY per E-Mail | CSV | getestet |
 | 4 | **Archive Download** (Formular) | alles, was älter als 7 Tage ist | wie 2, dazu NOAA-21 und Landsat | Earthdata Login oder E-Mail-Code; Lieferung per E-Mail | SHP, CSV, JSON | nicht getestet |
 | 5 | Tägliche Textdateien `nrt3` | NRT der letzten 2 Monate | 2 Monate | Earthdata Login | TXT | nicht getestet |
 | 6 | Burned Area (MCD64A1, VIIRS) | verbrannte Fläche, z. B. zur Validierung | — | SFTP-Zugang `fuoco.geog.umd.edu`; die Zugangsdaten stehen im User Guide auf S. 17 | HDF, GeoTIFF, SHP | nicht getestet |
@@ -74,10 +74,24 @@ Laut API-Übersicht (Version 4.2.8) ist der Endpunkt `country` aktuell **nicht v
 | MODIS C6.1 Aqua | 1 km | ab Juli 2002 |
 | VIIRS S-NPP | 375 m | 20.01.2012 bis **2.11.2026: eingestellt** |
 | VIIRS NOAA-20 | 375 m | ab 1.04.2018 |
-| VIIRS NOAA-21 | 375 m | ab 1.03.2023 laut Downloadseite, ab 17.01.2024 laut Active-Fire-Seite (FIRMS widerspricht sich hier) |
+| VIIRS NOAA-21 | 375 m | SP ab 1.03.2023, NRT ab 17.01.2024 (laut API; daher die zwei verschiedenen Daten auf den FIRMS-Seiten) |
 | Landsat 8/9 OLI | 30 m | ab 20.06.2022, NRT nur für USA und Kanada |
 
 NRT-Daten werden nach etwa 2–5 Monaten durch SP-Daten (Wissenschaftsqualität) ersetzt. Für Analysen empfiehlt FIRMS ausdrücklich SP.
+
+**Verfügbarkeit laut API** (`/api/data_availability/csv/[MAP_KEY]/ALL`, abgefragt am 14.11.2026):
+
+| Quelle | SP | NRT |
+|--------|----|-----|
+| MODIS | 01.11.2000 – 31.08.2026 | 01.09.2026 – heute |
+| VIIRS NOAA-20 | 01.04.2018 – 31.07.2026 | 01.08.2026 – heute |
+| VIIRS NOAA-21 | 01.03.2023 – 31.07.2026 | 17.01.2024 – heute |
+| VIIRS S-NPP | 20.01.2012 – 31.07.2026 | 01.08.2026 – 02.11.2026 |
+| Landsat | — | 20.06.2022 – heute |
+| GOES (geostationär) | — | 09.08.2022 – heute |
+| Burned Area MODIS / VIIRS | ab 01.11.2000 bzw. 01.03.2012, jeweils bis 01.08.2026 | — |
+
+Für einen Kalender „bis heute“ heißt das: SP bis Ende Juli bzw. August 2026, danach NRT. Diese Grenze wandert mit jedem SP-Nachschub nach hinten, deshalb immer `version` mitspeichern.
 
 ## 3. Gemessene Größen
 
@@ -128,10 +142,11 @@ GitHub warnt bei Dateien über 50 MiB und **blockiert Dateien über 100 MiB**. F
 
 ## 5. Fallstricke für die Harmonisierung (in den echten Dateien beobachtet)
 
-1. **Unterschiedliche Schemata von NRT und SP:**
-   - Die Spalten `instrument` und `type` gibt es nur in SP.
-   - Satellitenkürzel: in NRT `T`/`A`, in SP `Terra`/`Aqua`. S-NPP heißt in SP `N`.
-   - VIIRS-`confidence`: in NRT `low`/`nominal`/`high`, in SP `l`/`n`/`h`. MODIS verwendet in beiden 0–100.
+1. **Drei Schemata für dieselben Daten:** Die NRT-Dateien (Active Fire Data), die API-Antworten und das SP-Archiv unterscheiden sich.
+   - `type` gibt es nur in SP (Jahresarchiv und API mit `*_SP`). `instrument` fehlt nur in den NRT-Dateien.
+   - Satellitenkürzel: in den NRT-Dateien `T`/`A`, in SP `Terra`/`Aqua`. S-NPP heißt in SP `N`.
+   - VIIRS-`confidence`: in den NRT-Dateien `low`/`nominal`/`high`, in API und SP `l`/`n`/`h`. MODIS verwendet überall 0–100.
+   - `acq_time`: in den Dateien vierstellig (`0040`), in der API ohne führende Nullen (`414`). Als Zahl lesen und auf vier Stellen auffüllen.
    - `version`: in NRT `6.1NRT` bzw. `2.0NRT`, in SP `61.03` bzw. `2`.
    - Helligkeitsspalten: MODIS hat `brightness`/`bright_t31`, VIIRS `bright_ti4`/`bright_ti5`.
 2. **Statische Quellen: stark regionsabhängig.**
@@ -159,3 +174,18 @@ GitHub warnt bei Dateien über 50 MiB und **blockiert Dateien über 100 MiB**. F
 - Ankündigung zum Ende von S-NPP: https://www.earthdata.nasa.gov/news/blog/transitioning-from-suomi-npp-viirs-omps-what-firms-users-need-know
 - Giglio, L., Schroeder, W., Justice, C.O. (2016): *The collection 6 MODIS active fire detection algorithm and fire products.* Remote Sensing of Environment 178: 31–41. doi:10.1016/j.rse.2016.02.054
 - Schroeder, W., Oliva, P., Giglio, L., Csiszar, I. (2014): *The New VIIRS 375 m active fire detection data product.* Remote Sensing of Environment 143: 85–96. doi:10.1016/j.rse.2013.12.008
+
+## 8. Abgaberegeln mit Folgen für Repo und App
+
+Quelle: offizieller „Project Submission Guide“ von Space Apps, Stand 13.11.2026.
+
+- **Frist:** Sonntag, 15.11.2026, 23:59 Uhr Ortszeit des Local Events. Es zählt nur die zuletzt gespeicherte Abgabe.
+- **Englisch:** Die Projektseite *„and any linked materials“* müssen auf Englisch sein. Diese Datei ist deutsch und muss vor der Abgabe übersetzt oder aus den verlinkten Inhalten herausgehalten werden.
+- **Öffentlicher Link ohne Login:** Das gilt für die Demo und das finale Projekt. Ein MAP_KEY im Frontend wäre damit öffentlich, und jeder könnte das Limit von 5000 Transaktionen pro 10 Minuten aufbrauchen. Deshalb Daten vorab laden oder über ein eigenes Backend abfragen. Den Key nur in `.env` ablegen (per `.gitignore` ausgeschlossen).
+- **NASA-Daten:** Mindestens eine NASA-Quelle ist Pflicht für Global Awards. FIRMS erfüllt das. Im Feld „NASA Data“ konkret Produkte und Sensoren nennen.
+- **KI-Nutzung (SI):**
+  - Erlaubt, aber KI-generierter Code und KI-generierte Daten müssen *„in descriptive text and metadata“* gekennzeichnet werden.
+  - Die Lösungsidee selbst darf laut Regel nicht von der KI stammen.
+- **Demo:** höchstens 7 Folien oder 30 Sekunden Video. Wer darüber liegt, wird im Global Judging nicht berücksichtigt.
+- **Bewertung:** Impact, Creativity, Validity, Relevance, Presentation.
+- **Partnerdaten:** Daten der Partneragenturen (u. a. CONAE, ESA, JAXA) sind ausdrücklich erwünscht, aber keine Pflicht.
