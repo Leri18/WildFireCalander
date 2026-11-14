@@ -2,10 +2,28 @@
 
 Stand: 14.11.2026. Alles, was hier als **getestet** markiert ist, wurde am 14.11.2026 tatsächlich heruntergeladen und ausgewertet. **Nicht getestet** heißt, dass die Angabe nur von der offiziellen FIRMS-Seite stammt (Login bzw. Key fehlte).
 
-## 0. Challenge-Kontext
+## 0. Challenge: Anforderungen und was sie für die Daten bedeuten
 
-- Es ist Challenge #9, verfasst von **CONAE** (der argentinischen Raumfahrtagentur). Ziel ist eine Web-App, die MODIS- und VIIRS-Hotspots zu einem **„burning activity calendar“** harmonisiert.
-- ⚠️ **Nicht gegen den Originaltext verifiziert.** Die offizielle Seite `www.spaceappschallenge.org` war aus der Cloud-Umgebung nicht lesbar: Der Server liefert eine Zertifikatskette über das Cross-Sign „AAA Certificate Services“, und diesem Root vertraut die Umgebung nicht. Der Kontext oben stammt aus Suchergebnissen und Team-Repos anderer Teilnehmer. Vor allem der **Resources-Tab** ist ungeprüft: Falls CONAE dort eigene Daten verlinkt, fehlen sie hier.
+Grundlage ist der offizielle Details-Tab der Challenge „Harmonization of MODIS and VIIRS Hot Spots“ (Schwierigkeit: Intermediate/Advanced; Themen: Earth Science, Software). Die Challenge nennt FIRMS ausdrücklich als Datenbasis: *„You may consider harmonizing NASA Earthdata FIRMS hotspots“*.
+
+Sie besteht aus zwei Teilen:
+1. MODIS und VIIRS so harmonisieren, dass der Ursprungssensor keine Rolle mehr spielt.
+2. Eine Web-App bauen, die die harmonisierten Daten als Kalender zeigt.
+
+| Anforderung (offizieller Text) | Datenbedarf | Bezugsweg |
+|---|---|---|
+| Hotspot-Anzahl *„from the early 2000s to the present“* | MODIS ab 11/2000 bis heute, VIIRS ab 2012 | SP-Jahresarchiv (bis 2025) plus API für 2026 |
+| *„compare the burning activity of the current month against the historical median“* | der **komplette laufende Monat** als NRT | API `area` mit `*_NRT` (5 Tage pro Request) oder `nrt3` (2 Monate, Earthdata Login). Die 7-Tage-Dateien reichen dafür nicht. |
+| Region frei wählen (auf der Karte zeichnen oder Lat/Lon eingeben), dazu einen Zeitraum | räumlich aufgelöste Daten statt Länder-Summen | Punktdaten oder Raster (Zelle × Monat) |
+| *„downloadable CSV File of hot spots detected during a search“* | **Punktdaten** für jede Auswahl | eigene Parquet-Dateien (siehe Abschnitt 4) |
+| aktivste Monate und Jahre; Anomalien gegenüber dem mehrjährigen Mittel | Monatsaggregate pro Region, Median bzw. Mittel über alle Jahre | aus den harmonisierten Daten |
+| Laut Text zählen auch Feuer aus Landwirtschaft, Müllverbrennung und **Industrie** zur „burning activity“. | statische Quellen nicht pauschal entfernen | Feld `type` (nur in SP), siehe Abschnitt 5 |
+
+⚠️ Noch ungeprüft:
+- **Resources-Tab:** Bisher ist nur der Details-Tab gelesen.
+- **CONAE als Autorin:** Die Seite nennt CONAE nur als Bildquelle („Photo credit“).
+
+Die Seite `www.spaceappschallenge.org` lässt sich aus der Cloud-Umgebung nicht abrufen, weil ihre Zertifikatskette über „AAA Certificate Services“ läuft und dieser Root dort fehlt.
 
 ## 1. Zugangswege zu den FIRMS-Daten
 
@@ -89,16 +107,24 @@ NOAA-21 fehlt im Jahresarchiv und ist nur über API oder Archive Download erhäl
 
 GitHub warnt bei Dateien über 50 MiB und **blockiert Dateien über 100 MiB**. Für Repositories empfiehlt GitHub idealerweise unter 1 GB, dringend unter 5 GB (docs.github.com, „About large files on GitHub“).
 
-| Daten | Ins Repo? | Grund |
-|-------|-----------|-------|
-| Weltweites Rohdatenarchiv (43,5 GB, gezippt 9,8 GB) | ❌ | Liegt weit über der 5-GB-Empfehlung. |
-| VIIRS-Jahres-ZIPs (260–401 MB pro Datei) | ❌ | Jede Datei liegt über dem 100-MiB-Limit. |
-| Einzelne Land-Jahr-CSVs großer Länder | ❌ | 63 Dateien sind größer als 100 MiB, die größte hat 175 MB (DR Kongo, 2024). |
-| Argentinien komplett (511 MB) | ⚠️ technisch möglich, aber nicht ratsam | Git behält jede Version für immer, jeder Klon lädt die 511 MB mit. |
-| Deutschland komplett (35 MB) | ⚠️ technisch ok | Wächst mit jedem weiteren Land. |
-| Download-Skripte, kleine Stichproben, aggregierte Kalender (Zählungen pro Zelle × Tag) | ✅ | Klein und reproduzierbar. |
+**Parquet statt CSV** (gemessen an 8 echten Dateien mit zusammen 1,52 Mio. Zeilen): Parquet mit zstd-Kompression ist 2,8- bis 4,9-mal kleiner als CSV, im Schnitt 4,0-mal. Das sind etwa 21 Byte pro Hotspot.
 
-**Empfehlung:** Rohdaten gehören nach `data/raw/` (per `.gitignore` ausgeschlossen) und werden per Skript nachgeladen. Ins Repo kommen nur Code und aggregierte Ergebnisse.
+**Aggregation** (gemessen an Argentinien 2020): Ein Raster aus Zelle × Monat hat bei 0,25° 11- bis 29-mal weniger Zeilen als die Rohpunkte, bei 0,1° 5- bis 11-mal weniger. Ein Raster aus Zelle × Tag spart nur das 2- bis 6-Fache.
+
+| Daten | CSV | Parquet (geschätzt aus den gemessenen Faktoren) | Ins Repo? |
+|-------|-----|----------------------------|-----------|
+| Weltweites Archiv 2000–2025 | 43,5 GB (gezippt 9,8 GB) | ≈ 11 GB | ❌ Liegt über der 5-GB-Empfehlung und braucht externen Speicher. |
+| VIIRS-Jahres-ZIPs | 260–401 MB pro Datei | — | ❌ Jede Datei liegt über dem 100-MiB-Limit. |
+| Land-Jahr-CSVs großer Länder | 63 Dateien > 100 MiB, die größte 175 MB | — | ❌ |
+| Argentinien komplett (3 Sensoren) | 511 MB | ≈ 120 MB | ✅ wenn nach Jahr und Sensor aufgeteilt (jede Datei < 10 MB) |
+| Deutschland komplett | 35 MB | ≈ 9 MB | ✅ |
+| Monatsraster pro Region, Skripte | — | klein | ✅ |
+
+**Folge der CSV-Download-Anforderung** (siehe Abschnitt 0): Die App braucht **Punktdaten**, Aggregate allein reichen nicht.
+- Für den Hackathon realistisch ist **eine Demo-Region als aufgeteiltes Parquet**, abfragbar z. B. mit DuckDB.
+- Diesen Datenstand **einmal** committen. Wer ihn bei jeder Iteration neu committet, legt jedes Mal ca. 120 MB in die Git-Historie.
+- Weltweit geht es nur mit externem Speicher.
+- Roh-CSVs gehören weiter nach `data/raw/` (per `.gitignore` ausgeschlossen).
 
 ## 5. Fallstricke für die Harmonisierung (in den echten Dateien beobachtet)
 
@@ -108,7 +134,10 @@ GitHub warnt bei Dateien über 50 MiB und **blockiert Dateien über 100 MiB**. F
    - VIIRS-`confidence`: in NRT `low`/`nominal`/`high`, in SP `l`/`n`/`h`. MODIS verwendet in beiden 0–100.
    - `version`: in NRT `6.1NRT` bzw. `2.0NRT`, in SP `61.03` bzw. `2`.
    - Helligkeitsspalten: MODIS hat `brightness`/`bright_t31`, VIIRS `bright_ti4`/`bright_ti5`.
-2. **Statische Quellen dominieren:** In Deutschland 2023 (SP) sind `type = 2` (Industrie, Fackeln usw.) **68 % der MODIS-, 78 % der NOAA-20- und 80 % der S-NPP-Detektionen**. Nur `type = 0` steht für Vegetationsfeuer. NRT hat keine `type`-Spalte, deshalb braucht ihr eine Maske aus der SP-Historie.
+2. **Statische Quellen: stark regionsabhängig.**
+   - In Deutschland 2023 (SP) fallen **68 % der MODIS-, 78 % der NOAA-20- und 80 % der S-NPP-Detektionen** unter `type = 2` („other static land source“). In Argentinien 2020 sind es nur 2,6 % (MODIS) bzw. 1,1 % (S-NPP).
+   - Die Challenge zählt Industrie-Feuer ausdrücklich zur „burning activity“. Deshalb diese Quellen nicht pauschal entfernen, sondern einen Filter anbieten.
+   - Entscheidend ist die **Konsistenz**: Die NRT-Daten des laufenden Monats haben keine `type`-Spalte. Wer die Historie (SP) filtert, muss denselben Filter über eine Maske aus der SP-Historie auch auf NRT anwenden. Sonst erzeugt der Vergleich „aktueller Monat gegen Median“ künstliche Anomalien.
 3. **Rohzählungen sind nicht vergleichbar:** In derselben NRT-Woche lieferte **ein** VIIRS-Satellit 5,4- bis 5,5-mal so viele Detektionen wie MODIS Terra und Aqua zusammen (statische Quellen eingeschlossen). Für Deutschland 2023, nur Vegetationsfeuer: NOAA-20 3.332, S-NPP 2.992, MODIS 812 (Faktor 4,1 bzw. 3,7).
 4. **Sprünge in der Zeitreihe:**
    - Aqua kam erst im Juli 2002 dazu. Die MODIS-Archivgröße springt von 139 MB (2001) über 289 MB (2002) auf 400 MB (2003).
