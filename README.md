@@ -70,6 +70,29 @@ python scripts/build_app_data.py --region Argentina
 Known gaps of the demo: one region (Argentina), archive ends 2025-12 (no current month yet),
 downloads contain counts per cell and month, not the individual hot-spot records.
 
+## Second region: Germany
+
+`docs/germany/` holds a teammate's point map for Germany (MapLibre, all FIRMS sensors,
+2000-11 to 2026-11) with the harmonized calendar added as a dialog. It is served at
+`/germany/` next to the Argentina app. Its data comes from the FIRMS API, not from the
+yearly country archive:
+
+```bash
+python scripts/import_api_archive.py --src data/raw/api/germany --region Germany
+```
+
+```bash
+python scripts/harmonize.py --region Germany --end 2026-10 --method B1
+```
+
+```bash
+python scripts/build_app_data.py --region Germany --out docs/germany/data/harm
+```
+
+`scripts/api_archive/` contains the teammate's download and packing scripts for the API
+archive (they need a FIRMS MAP_KEY in `.env`, which is never committed). The interface of
+this app is in German. Results and caveats: section 11 of the report.
+
 ## Data acknowledgement
 
 We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource

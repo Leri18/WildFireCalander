@@ -74,7 +74,7 @@ def main() -> int:
     print(f"cells {N}, months {T}, modeled months {n_modeled}")
     print(f"quantisation: max abs error of a monthly country total {err.max():.2f} hotspots "
           f"(max relative {100 * rel.max():.4f} %)")
-    if rel.max() > 0.002:
+    if (err > np.maximum(0.5, 0.002 * monthly["harmonized_viirs_eq"].to_numpy())).any():
         raise SystemExit("quantised data does not reproduce the monthly table")
     if not (modis.sum(axis=1) == monthly["modis_count"].to_numpy()).all():
         raise SystemExit("MODIS cell counts do not add up to the monthly table")

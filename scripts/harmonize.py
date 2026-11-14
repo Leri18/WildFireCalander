@@ -58,11 +58,25 @@ def mi(year: int, month: int) -> int:
     return (year - Y0) * 12 + (month - 1) - (M0 - 1)
 
 
-T = mi(Y1, M1_) + 1
-MONTH_YEAR = np.array([Y0 + (t + M0 - 1) // 12 for t in range(T)])
-MONTH_CAL = np.array([(t + M0 - 1) % 12 + 1 for t in range(T)])
-MONTH_LABEL = np.array([f"{y}-{m:02d}" for y, m in zip(MONTH_YEAR, MONTH_CAL)])
 T_OV0, T_AQUA, T_N20 = mi(*OVERLAP_START), mi(*AQUA_START), mi(*N20_START)
+YV1 = Y1                     # last validation year (the yearly archive ends 2025-12)
+T_OVE = mi(Y1, M1_) + 1      # end of the overlap / validation period (exclusive), fixed at 2025-12
+
+
+def configure(end_year: int = Y1, end_month: int = M1_) -> None:
+    """Set the last month of the record. Months after 2025-12 are not used for training or
+    validation; they are only appended to the calendar as observed VIIRS months."""
+    global T, MONTH_YEAR, MONTH_CAL, MONTH_LABEL, Y1
+    T = mi(end_year, end_month) + 1
+    if T < T_OVE:
+        raise SystemExit("the record must reach at least 2025-12")
+    MONTH_YEAR = np.array([Y0 + (t + M0 - 1) // 12 for t in range(T)])
+    MONTH_CAL = np.array([(t + M0 - 1) % 12 + 1 for t in range(T)])
+    MONTH_LABEL = np.array([f"{y}-{m:02d}" for y, m in zip(MONTH_YEAR, MONTH_CAL)])
+    Y1 = end_year
+
+
+configure()
 
 
 # --------------------------------------------------------------------------- data
@@ -161,10 +175,10 @@ def prepare(df: pd.DataFrame, g: Grid) -> dict:
     is_modis = (sat == "Terra") | (sat == "Aqua")
     cubes = {s: g.cube(flat[sat == s]) for s in ("Terra", "Aqua", "S-NPP", "NOAA-20")}
     cubes["MODIS"] = cubes["Terra"] + cubes["Aqua"]
-    full = source_features(g, df[is_modis], flat[is_modis], "modis", (2003, Y1))
+    full = source_features(g, df[is_modis], flat[is_modis], "modis", (2003, YV1))
     full["terra_n"] = cubes["Terra"]
     full["aqua_n"] = cubes["Aqua"]
-    terra = source_features(g, df[sat == "Terra"], flat[sat == "Terra"], "terra", (2001, Y1))
+    terra = source_features(g, df[sat == "Terra"], flat[sat == "Terra"], "terra", (2001, YV1))
     shape = (T, g.H, g.W)
     common = {
         "month": np.broadcast_to(MONTH_CAL[:, None, None].astype(np.float32), shape),
@@ -250,14 +264,14 @@ def above_median_flags(series: np.ndarray, t_idx: np.ndarray, ref: np.ndarray | 
 
 def loyo(prep: dict, variant: str, cellmask: np.ndarray, modis_cellmask: np.ndarray,
          methods=("B0", "B1", "M1")) -> dict:
-    t_idx = np.arange(T_OV0, T)
+    t_idx = np.arange(T_OV0, T_OVE)
     X, names, rows_t, base = panel(prep, variant, t_idx, cellmask)
     y = prep["cubes"]["S-NPP"][t_idx][:, cellmask].ravel().astype(np.float64)
     years = MONTH_YEAR[rows_t]
     in_modis_cell = np.tile(modis_cellmask[cellmask], len(t_idx))
     oos = {m: np.zeros(len(y)) for m in methods}
     clip_start = len(CLIP_LOG)
-    for yr in range(OVERLAP_START[0], Y1 + 1):
+    for yr in range(OVERLAP_START[0], YV1 + 1):
         te = years == yr
         tr = ~te
         for m in methods:
@@ -272,7 +286,7 @@ def loyo(prep: dict, variant: str, cellmask: np.ndarray, modis_cellmask: np.ndar
            "obs": obs, "series": {}, "per_year": [], "summary": {}, "n20": {},
            "cell_oos": oos, "rows_t": rows_t, "y": y, "range_guard": clip_stats(clip_start)}
     flags_obs = above_median_flags(obs, t_idx)
-    t_n20 = np.arange(T_N20, T)
+    t_n20 = np.arange(T_N20, T_OVE)
     flags_n20 = above_median_flags(n20, t_n20)
     for m in methods:
         pred = region_series(oos[m], rows_t)
@@ -280,7 +294,7 @@ def loyo(prep: dict, variant: str, cellmask: np.ndarray, modis_cellmask: np.ndar
         f_own = above_median_flags(pred, t_idx)
         f_obsmed = above_median_flags(pred, t_idx, ref=obs)
         rows = []
-        for yr in range(OVERLAP_START[0], Y1 + 1):
+        for yr in range(OVERLAP_START[0], YV1 + 1):
             tt = t_idx[MONTH_YEAR[t_idx] == yr]
             te = years == yr
             rows.append({
@@ -375,7 +389,7 @@ def fig_raw(region, modis, snpp, n20, out: Path):
     a.set_title(f"{region}: raw monthly hotspot counts are not comparable across sensors",
                 loc="left", color=INK, fontsize=12, fontweight="bold")
     a.legend(frameon=False, fontsize=9, ncol=3, loc="upper left", labelcolor=INK2)
-    ov = np.arange(T_OV0, T)
+    ov = np.arange(T_OV0, T_OVE)
     ratio = snpp[ov] / modis[ov]
     b.plot(month_dates(ov), ratio, color=INK2, lw=1.4)
     b.axhline(np.median(ratio), color=GRIDC, lw=1.2, ls="--")
@@ -391,7 +405,7 @@ def fig_raw(region, modis, snpp, n20, out: Path):
 
 
 def fig_heldout(region, res, chosen, out: Path):
-    t = np.arange(T_OV0, T)
+    t = np.arange(T_OV0, T_OVE)
     d = month_dates(t)
     obs = res["obs"][t]
     fig = plt.figure(figsize=(11, 7.4), facecolor=SURF)
@@ -520,10 +534,15 @@ def main() -> int:
     ap.add_argument("--processed", default="data/processed")
     ap.add_argument("--out", default="data/harmonized")
     ap.add_argument("--figures", default="docs/figures")
+    ap.add_argument("--end", default="2025-12", metavar="YYYY-MM",
+                    help="last month of the calendar; months after 2025-12 are appended as observed")
+    ap.add_argument("--method", default="auto", choices=["auto", "B0", "B1", "M1"],
+                    help="method for the final calendar; auto = lowest leave-one-year-out MAE")
     ap.add_argument("--skip-sensitivity", action="store_true",
                     help="skip the all-types rerun (saves about a third of the run time)")
     args = ap.parse_args()
     region = args.region
+    configure(int(args.end[:4]), int(args.end[5:7]))
     key = region.lower()
     out = Path(args.out)
     figs = Path(args.figures)
@@ -540,19 +559,19 @@ def main() -> int:
     cubes = prep["cubes"]
     M: dict = {"region": region, "grid_deg": GRID, "n_months_record": T,
                "first_month": MONTH_LABEL[0], "last_month": MONTH_LABEL[-1],
-               "overlap": [MONTH_LABEL[T_OV0], MONTH_LABEL[-1]],
+               "overlap": [MONTH_LABEL[T_OV0], MONTH_LABEL[T_OVE - 1]],
                "n_detections_all_types": int(len(pts_all)), "n_detections_type0": int(len(pts)),
                "hgb_params": HGB_PARAMS, "deviance_floor": DEV_FLOOR, "interval_quantiles": PI_Q}
 
     # panels ------------------------------------------------------------------
-    ov = slice(T_OV0, T)
+    ov = slice(T_OV0, T_OVE)
     train_cells = (cubes["MODIS"][ov] + cubes["S-NPP"][ov] + cubes["NOAA-20"][ov]).sum(axis=0) > 0
     modis_cells_ov = cubes["MODIS"][ov].sum(axis=0) > 0
     pred_cells = cubes["MODIS"][:T_OV0].sum(axis=0) > 0          # >= 1 MODIS detection, 2000-11..2012-01
     snpp_ov = cubes["S-NPP"][ov]
     M["panel"] = {
         "train_cells": int(train_cells.sum()),
-        "train_rows": int(train_cells.sum() * (T - T_OV0)),
+        "train_rows": int(train_cells.sum() * (T_OVE - T_OV0)),
         "train_cells_with_modis": int(modis_cells_ov.sum()),
         "pred_cells_modis_2000_2012": int(pred_cells.sum()),
         "pred_cells_not_in_train_panel": int((pred_cells & ~train_cells).sum()),
@@ -579,7 +598,7 @@ def main() -> int:
         "snpp_over_aqua_monthly_max": float((reg["S-NPP"][t20] / reg["Aqua"][t20]).max()),
         "night_share_modis": night["MODIS"], "night_share_snpp": night["S-NPP"],
     }
-    tov = np.arange(T_OV0, T)
+    tov = np.arange(T_OV0, T_OVE)
     ratio = reg["S-NPP"][tov] / reg["MODIS"][tov]
     M["overlap_ratio_snpp_over_modis"] = {
         "sum_ratio": float(reg["S-NPP"][tov].sum() / reg["MODIS"][tov].sum()),
@@ -590,7 +609,7 @@ def main() -> int:
                               for m in range(1, 13)},
         "by_year": {int(y): float(reg["S-NPP"][tov][MONTH_YEAR[tov] == y].sum()
                                   / reg["MODIS"][tov][MONTH_YEAR[tov] == y].sum())
-                    for y in range(OVERLAP_START[0], Y1 + 1)},
+                    for y in range(OVERLAP_START[0], YV1 + 1)},
     }
     print("orientation 2020:", M["orientation_2020"], flush=True)
 
@@ -599,10 +618,12 @@ def main() -> int:
     res_full = loyo(prep, "full", train_cells, modis_cells_ov)
     print("LOYO terra variant (Terra-only features) ...", flush=True)
     res_terra = loyo(prep, "terra", train_cells, modis_cells_ov)
-    chosen_full = choose(res_full["summary"])
-    chosen_terra = choose(res_terra["summary"])
+    chosen_full = choose(res_full["summary"]) if args.method == "auto" else args.method
+    chosen_terra = choose(res_terra["summary"]) if args.method == "auto" else args.method
     M["loyo"] = {"full": strip(res_full), "terra": strip(res_terra)}
     M["chosen"] = {"full": chosen_full, "terra": chosen_terra,
+                   "by_mae_rule": {"full": choose(res_full["summary"]), "terra": choose(res_terra["summary"])},
+                   "override": None if args.method == "auto" else args.method,
                    "rule": "lowest mean leave-one-year-out region-month MAE; "
                            "M1 only if it beats the better baseline"}
     per_year = pd.DataFrame(res_full["per_year"] + res_terra["per_year"])
@@ -621,10 +642,10 @@ def main() -> int:
         for m in ("B0", "B1", "M1")}
 
     # transfer check S-NPP vs NOAA-20 -------------------------------------------------
-    tn = np.arange(T_N20, T)
+    tn = np.arange(T_N20, T_OVE)
     rn = reg["S-NPP"][tn] / reg["NOAA-20"][tn]
     M["snpp_vs_noaa20"] = {
-        "period": [MONTH_LABEL[T_N20], MONTH_LABEL[-1]], "n_months": int(len(tn)),
+        "period": [MONTH_LABEL[T_N20], MONTH_LABEL[T_OVE - 1]], "n_months": int(len(tn)),
         "sum_ratio_snpp_over_noaa20": float(reg["S-NPP"][tn].sum() / reg["NOAA-20"][tn].sum()),
         "monthly_ratio_min": float(rn.min()), "monthly_ratio_median": float(np.median(rn)),
         "monthly_ratio_max": float(rn.max()),

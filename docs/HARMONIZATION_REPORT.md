@@ -380,3 +380,76 @@ NASA's Earth Science Data and Information System (ESDIS).
 - Schroeder, W., Oliva, P., Giglio, L., Csiszar, I. (2014): The New VIIRS 375 m active fire
   detection data product. Remote Sensing of Environment 143: 85-96. doi:10.1016/j.rse.2013.12.008
 - MODIS Collection 6 and Collection 6.1 Active Fire Product User's Guide, version 1.0 (link above).
+
+## 11. Second region: Germany (bounding box, FIRMS API archive)
+
+Added after the Argentina experiment to answer whether the approach transfers. Same scripts,
+same validation design. Numbers are in `data/harmonized/germany_metrics.json`.
+
+**Data.** A teammate's FIRMS API archive for the box 5.5 to 15.5 °E, 47 to 55.5 °N (Germany
+plus border regions, not the country outline): 641 monthly files, 735,135 detections
+from 2000-11 to 2026-11-14, science quality up to July or August 2026 and near-real-time after
+that. Converted with `scripts/import_api_archive.py`. Near-real-time rows have no `type`;
+26,239 such rows were typed by a rule (18,799 within about 1 km of a
+known static source became type 2, the rest type 0). This is a derivation, not a NASA class.
+
+| Satellite | Rows | type 0 share | NRT rows |
+|---|---|---|---|
+| Aqua | 38,768 | 29.1 % | 570 |
+| NOAA-20 | 215,429 | 20.3 % | 8,670 |
+| NOAA-21 | 85,484 | 22.4 % | 8,573 |
+| S-NPP | 347,715 | 17.0 % | 7,849 |
+| Terra | 47,739 | 18.5 % | 577 |
+
+Only 142,027 of 734,233 detections are vegetation fires (type 0). The calendar
+covers 2000-11 to 2026-10; November 2026 is incomplete and S-NPP ended on 2026-11-02.
+
+**What is different from Argentina.** The mean monthly S-NPP count in the overlap period is
+318 (Argentina: 16,733). S-NPP reports 4.33 times as many type 0 hot spots as MODIS.
+80.3 % of all S-NPP detections fall into cell-months in which MODIS saw nothing
+(Argentina: 7.9 %). MODIS therefore carries little information about what VIIRS sees here.
+
+**Leave-one-year-out results, Terra+Aqua variant, type 0:**
+
+| Method | MAE | Bias | R² (mean of years) | Poisson deviance | Median agreement |
+|---|---|---|---|---|---|
+| B0 | 179.1 | +2.8 | -0.096 | 2.35 | 76.7 % |
+| B1 | 115.3 | +7.1 | 0.577 | 2.36 | 76.7 % |
+| M1 | 87.4 | -0.2 | 0.750 | 0.77 | 55.7 % |
+
+**Terra-only variant:**
+
+| Method | MAE | Bias | R² (mean of years) | Poisson deviance | Median agreement |
+|---|---|---|---|---|---|
+| B0 | 178.3 | +4.2 | -0.014 | 2.60 | 71.3 % |
+| B1 | 138.5 | +12.3 | 0.355 | 2.61 | 68.8 % |
+| M1 | 93.9 | -0.1 | 0.718 | 0.80 | 49.7 % |
+
+**Reading.** M1 has the lowest MAE and the highest R², but it agrees with S-NPP on "above or
+below the median of the calendar month" in only 55.7 % of months, close to a coin
+flip and far below the factor methods (76.7 %). It reproduces the seasonal cycle and
+flattens the year-to-year differences, which are exactly what the calendar is for. The MAE
+rule of section 1 would pick M1; **for Germany the calendar uses B1 instead**
+(`--method B1`), and this deviation from the rule is deliberate. B1 itself is weak here:
+MAE 115 on a mean of 318, R² 0.58. The 90 % interval of B1 spans a factor of
+0.45 to 30.0, because months with zero MODIS detections are predicted as zero.
+With all types instead of type 0, M1 reaches MAE 322 and B1 343, agreement 72.5 % and 78.5 %.
+
+**S-NPP against NOAA-20** (2018-04 to 2025-12): sum ratio 0.907, monthly ratio 0.19 to
+1.80, correlation 0.958. The two VIIRS sensors agree much less well than in Argentina
+(1.013, correlation 0.997), so a switch to NOAA-20 needs its own correction here.
+
+**2002 step:** raw MODIS after/before 4.03, Terra only 1.70, harmonized 1.37.
+497 of 607 days in the Terra-only period have no Terra detection in the box, so
+this comparison rests on very few detections.
+
+**Conclusion on transfer.** The pipeline runs on a second region after two small generalizations
+(`--end` for the last calendar month, `--method` to override the choice). The quality does
+not transfer: where MODIS sees few fires, no method recovers the VIIRS record well, and the
+gradient-boosting model is worse than a monthly factor for the calendar's purpose. The method
+has to be chosen per region from the validation, and the use-case metric must be part of
+that choice, not only the MAE.
+
+**Web app.** `docs/germany/` is the teammate's point map of this archive with the harmonized
+calendar added (`calendar.js`). Its interface is in German and must be translated before it is
+linked from the submission.
