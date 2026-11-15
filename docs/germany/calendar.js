@@ -57,6 +57,7 @@ async function load() {
 function regionName(r) {
   if (r === -2) return 'Deutschland mit Grenzregion';
   if (r === -1) return 'Deutschland';
+  if (r === -3) return 'Eigene Fläche';
   const opt = $('#regionSel').querySelector(`option[value="${r}"]`);
   return opt ? opt.textContent : 'Gebiet';
 }
@@ -67,6 +68,7 @@ function compute() {
   const idx = [];
   for (let i = 0; i < D.N; i++) {
     if (r === -2) { idx.push(i); continue; }
+    if (r === -3) { const a = fk.state.area; if (a && D.lon[i] >= a[0] && D.lon[i] <= a[2] && D.lat[i] >= a[1] && D.lat[i] <= a[3]) idx.push(i); continue; }
     const k = fk.regionIndex(D.lon[i], D.lat[i]);
     if (r === -1 ? k < 16 : k === r) idx.push(i);
   }
