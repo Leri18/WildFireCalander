@@ -64,6 +64,10 @@ const THEMES = {
   },
 };
 
+// Strassenkarte von OpenStreetMap: helle Karte mit Wegen, Ortsnamen und Flurgrenzen zur genauen Orientierung
+THEMES.osm = { ...THEMES.light, mask: 'rgba(252,252,251,0.38)', outline: 'rgba(11,11,11,0.75)' };
+const isLight = (b) => b === 'light' || b === 'osm';
+
 /* ------------------------------------------------------------------ Hilfen */
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -940,7 +944,7 @@ function addRegionLayers() {
   // Umriss des gewaehlten Bundeslands (Filter setzt selectRegion)
   map.addLayer({
     id: 'de-sel', type: 'line', source: 'de-states', filter: ['==', ['get', 'NUTS_ID'], ''],
-    paint: { 'line-color': state.basemap === 'light' ? '#2a78d6' : '#3987e5', 'line-width': 2.4 },
+    paint: { 'line-color': isLight(state.basemap) ? '#2a78d6' : '#3987e5', 'line-width': 2.4 },
   }, 'fires');
 }
 
@@ -967,12 +971,14 @@ function initMap() {
       'base-light': rs(esri('Canvas/World_Light_Gray_Base'), esriAttr, 16),
       'labels-light': rs(esri('Canvas/World_Light_Gray_Reference'), '', 16),
       'sat-nasa': rs([NASA_TILES], nasaAttr, 8),
+      osm: rs(['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende', 19),
       'sat-blue': rs(esri('World_Imagery'), satAttr, 19),
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#0d0d0d' } },
       { id: 'base-dark', type: 'raster', source: 'base-dark' },
       { id: 'base-light', type: 'raster', source: 'base-light', layout: hid },
+      { id: 'osm', type: 'raster', source: 'osm', layout: hid },
       { id: 'sat-nasa', type: 'raster', source: 'sat-nasa', layout: hid },
       { id: 'sat-blue', type: 'raster', source: 'sat-blue', layout: hid },
       { id: 'labels-dark', type: 'raster', source: 'labels-dark' },
@@ -981,12 +987,14 @@ function initMap() {
   };
   map = new maplibregl.Map({
     container: 'map', style, bounds: DE_BOUNDS, fitBoundsOptions: { padding: mapPadding() },
-    minZoom: 1, maxZoom: 16, attributionControl: false,
+    minZoom: 1, maxZoom: 18, attributionControl: false,
     dragRotate: false, pitchWithRotate: false, touchPitch: false,
   });
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  // Eigener Standort: springt zur Position des Geraets (der Browser fragt vorher um Erlaubnis)
+  map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false, fitBoundsOptions: { maxZoom: 14 } }), 'top-right');
   map.addControl(new maplibregl.AttributionControl({
     compact: true,
     customAttribution: 'Feuerdaten: <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">NASA FIRMS</a> · Grenzen: © EuroGeographics',
@@ -1050,8 +1058,8 @@ let tilesDown = false, cityMarkers = null;
 function checkTiles() {
   const b = state.basemap;
   const isDown = (id) => { const st = tileStat[id]; return !!st && st.ok === 0 && st.err >= 3; };
-  const baseDown = b === 'sat' ? isDown('sat-blue') && isDown('sat-nasa') : isDown(b === 'light' ? 'base-light' : 'base-dark');
-  const labelsDown = isDown(b === 'light' ? 'labels-light' : 'labels-dark');
+  const baseDown = b === 'sat' ? isDown('sat-blue') && isDown('sat-nasa') : isDown(b === 'osm' ? 'osm' : b === 'light' ? 'base-light' : 'base-dark');
+  const labelsDown = b === 'osm' ? isDown('osm') : isDown(b === 'light' ? 'labels-light' : 'labels-dark');
   notice('tiles', baseDown ? 'Die Hintergrundkarte ist gerade nicht erreichbar. Gezeigt wird eine vereinfachte Karte aus den Ländergrenzen.' : '');
   if (labelsDown === tilesDown) return;
   tilesDown = labelsDown;
@@ -1066,10 +1074,11 @@ function checkTiles() {
 }
 function applyBasemap() {
   const b = state.basemap, th = THEMES[b];
-  document.documentElement.dataset.theme = b === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = isLight(b) ? 'light' : 'dark';
   const vis = (id, on) => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
   vis('base-dark', b === 'dark');
-  vis('labels-dark', b !== 'light');
+  vis('osm', b === 'osm');
+  vis('labels-dark', !isLight(b));
   vis('base-light', b === 'light');
   vis('labels-light', b === 'light');
   vis('sat-nasa', b === 'sat');
@@ -1080,7 +1089,7 @@ function applyBasemap() {
     map.setPaintProperty('de-mask', 'fill-color', th.mask);
     map.setPaintProperty('de-states', 'line-color', th.line);
     map.setPaintProperty('de-outline', 'line-color', th.outline);
-    map.setPaintProperty('de-sel', 'line-color', b === 'light' ? '#2a78d6' : '#3987e5');
+    map.setPaintProperty('de-sel', 'line-color', isLight(b) ? '#2a78d6' : '#3987e5');
   }
   updateSatDate(true);
   renderLegend();
@@ -1407,7 +1416,7 @@ async function init() {
     statMaxBtn: $('#statMaxBtn'), playBtn: $('#playBtn'), playIcon: $('#playIcon'), regionRanks: $('#regionRanks'),
   });
   if (window.innerWidth <= 860) document.body.classList.add('panel-closed');
-  document.documentElement.dataset.theme = state.basemap === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = isLight(state.basemap) ? 'light' : 'dark';
   const loading = $('#loading');
   const fail = (msg) => { loading.classList.add('error'); $('#loadingText').textContent = msg; };
 
