@@ -13,7 +13,7 @@ for the test region Argentina:
 - `docs/HARMONIZATION_REPORT.md`: data, methods, metrics, limitations
 - `data/harmonized/`: the harmonized monthly calendar and the validation tables
 - `docs/figures/`: figures used in the report
-- `docs/index.html`, `docs/app/`: the calendar web app
+- `docs/`: the web site (fire map of Germany, calendar for Argentina)
 - `scripts/build_app_data.py`: packs the harmonized data for the web app
 
 ## How to reproduce
@@ -43,39 +43,38 @@ python scripts/harmonize.py --region Argentina
 
 `data/raw/` and `data/processed/` are not committed; they are rebuilt by steps 1 and 2.
 
-## Web app
+## Web apps
 
-`docs/` contains the calendar as a static web app (no build step, no external requests):
-`docs/index.html`, `docs/app/app.js`, `docs/app/style.css` and the packed data in
-`docs/app/data/`. It offers a map to select an area (drag a box or type its edges), the
-harmonized calendar with year totals and the median of every calendar month, a comparison
-of any month with the median of its calendar month, a switch to the raw sensor counts, and
-CSV downloads for the selection.
+`docs/` is a static web site (no build step). It is published with GitHub Pages at
+https://leri18.github.io/WildFireCalander/
 
-Run it locally:
+| Page | Path | Content |
+|---|---|---|
+| Fire Map Germany (start page) | `docs/index.html`, `app.js`, `calendar.js`, `style.css`, `data/` | A teammate's point map of every FIRMS detection in the box 5.5 to 15.5 °E, 47 to 55.5 °N from 2000-11 to 2026-11 (MapLibre). Satellite and OpenStreetMap backgrounds, filters, timeline, selection by state or by a rectangle drawn on the map, CSV download of the detections shown, and the harmonized calendar as a dialog. |
+| Wildfire Calendar Argentina | `docs/argentina/` | The harmonized calendar for the validated test region, with area selection, month-against-median reading, raw sensor view and CSV downloads. |
+
+Run the site locally:
 
 ```bash
 python -m http.server 8000 --directory docs
 ```
 
-Then open http://localhost:8000. To publish it, enable GitHub Pages for the `docs/` folder
-of the default branch (repository Settings, Pages, "Deploy from a branch").
+Then open http://localhost:8000 (map) or http://localhost:8000/argentina/.
 
-After a new harmonization run, repack the app data:
+### Publishing
+
+Repository Settings, Pages, "Deploy from a branch", then choose the branch that contains
+`docs/` and the folder `/docs`. The repository has to be public on the free GitHub plan.
+
+### Rebuilding the app data
+
+Argentina, after a new harmonization run:
 
 ```bash
 python scripts/build_app_data.py --region Argentina
 ```
 
-Known gaps of the demo: one region (Argentina), archive ends 2025-12 (no current month yet),
-downloads contain counts per cell and month, not the individual hot-spot records.
-
-## Second region: Germany
-
-`docs/germany/` holds a teammate's point map for Germany (MapLibre, all FIRMS sensors,
-2000-11 to 2026-11) with the harmonized calendar added as a dialog. It is served at
-`/germany/` next to the Argentina app. Its data comes from the FIRMS API, not from the
-yearly country archive:
+Germany (data from the FIRMS API archive, not from the yearly country archive):
 
 ```bash
 python scripts/import_api_archive.py --src data/raw/api/germany --region Germany
@@ -86,12 +85,15 @@ python scripts/harmonize.py --region Germany --end 2026-10 --method B1
 ```
 
 ```bash
-python scripts/build_app_data.py --region Germany --out docs/germany/data/harm
+python scripts/build_app_data.py --region Germany --out docs/data/harm
 ```
 
 `scripts/api_archive/` contains the teammate's download and packing scripts for the API
-archive (they need a FIRMS MAP_KEY in `.env`, which is never committed). The interface of
-this app is in German. Results and caveats: section 11 of the report.
+archive (they need a FIRMS MAP_KEY in `.env`, which is never committed). Results and caveats
+for Germany: section 11 of the report.
+
+Known gaps: the harmonization is validated for Argentina and weak for Germany (report,
+section 11); the Argentina app ends in 2025-12 and offers cell counts, not single hot spots.
 
 ## Data acknowledgement
 

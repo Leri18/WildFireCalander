@@ -11,27 +11,27 @@ const SOURCES = {
   VIIRS_NOAA21: { label: 'VIIRS · NOAA-21', res: '375 m' },
   VIIRS_NOAA20: { label: 'VIIRS · NOAA-20', res: '375 m' },
   VIIRS_SNPP: { label: 'VIIRS · Suomi NPP', res: '375 m' },
-  MODIS: { label: 'MODIS · Terra und Aqua', res: '1 km' },
-  GOES: { label: 'Meteosat, geostationär', res: '2–3 km' },
+  MODIS: { label: 'MODIS · Terra and Aqua', res: '1 km' },
+  GOES: { label: 'Meteosat, geostationary', res: '2–3 km' },
 };
 const DRAW_ORDER = ['GOES', 'MODIS', 'VIIRS_SNPP', 'VIIRS_NOAA20', 'VIIRS_NOAA21'];
 
 // Art der Quelle: vier Gruppen fuer Filter und Farbe; CODE_GROUP ordnet die Codes der Binaerdatei zu
 const GROUPS = [
-  { id: 'veg', label: 'Vegetationsbrand', on: true },
-  { id: 'unk', label: 'Nicht eingestuft', on: false },
-  { id: 'stat', label: 'Industrie, feste Quelle', on: false },
+  { id: 'veg', label: 'Vegetation fire', on: true },
+  { id: 'unk', label: 'Not classified', on: false },
+  { id: 'stat', label: 'Industry, static source', on: false },
   { id: 'other', label: 'Offshore', on: false },
 ];
 const CODE_GROUP = [1, 0, 3, 2, 3, 2, 1, 1];
 const CODE_TEXT = [
-  ['Nicht eingestuft', 'Für echtzeitnahe Daten liegt noch keine Einstufung der NASA vor.'],
-  ['Vegetationsbrand', 'Einstufung der NASA: vermuteter Vegetationsbrand.'],
-  ['Aktiver Vulkan', 'Einstufung der NASA.'],
-  ['Feste Wärmequelle', 'Einstufung der NASA: feste Landquelle, zum Beispiel Industrie.'],
-  ['Offshore', 'Einstufung der NASA: Detektion über Wasser.'],
-  ['Feste Wärmequelle', 'Abgeleitet: An diesem Ort führt die NASA in älteren Daten eine feste Wärmequelle.'],
-  ['Nicht eingestuft', ''], ['Nicht eingestuft', ''],
+  ['Not classified', 'NASA has not classified near-real-time data yet.'],
+  ['Vegetation fire', 'NASA classification: presumed vegetation fire.'],
+  ['Active volcano', 'NASA classification.'],
+  ['Static heat source', 'NASA classification: static land source, for example industry.'],
+  ['Offshore', 'NASA classification: detection over water.'],
+  ['Static heat source', 'Derived: older NASA data lists a static heat source at this place.'],
+  ['Not classified', ''], ['Not classified', ''],
 ];
 const LEGEND_ORDER = [2, 0, 1, 3];       // feste Quelle, Vegetationsbrand, nicht eingestuft, Offshore
 
@@ -87,19 +87,19 @@ function lowerBound(arr, v) {
   return lo;
 }
 
-const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
-const nf1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const nf2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const nf5 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 5, maximumFractionDigits: 5 });
-const fmtCount = (n) => (n >= 1e6 ? `${nf2.format(n / 1e6)} Mio.` : nf0.format(n));
+const nf0 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf5 = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 5, maximumFractionDigits: 5 });
+const fmtCount = (n) => (n >= 1e6 ? `${nf2.format(n / 1e6)} million` : nf0.format(n));
 const fmtPower = (mw) => (mw >= 1000 ? `${nf1.format(mw / 1000)} GW` : mw >= 100 ? `${nf0.format(mw)} MW` : `${nf1.format(mw)} MW`);
-const utc = (o) => new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', ...o });
+const utc = (o) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...o });
 const dfDate = utc({ day: '2-digit', month: '2-digit', year: 'numeric' });
 const dfDay = utc({ day: '2-digit', month: '2-digit' });
 const dfTime = utc({ hour: '2-digit', minute: '2-digit' });
 const dfMonS = utc({ month: 'short' });
 const dfMonL = utc({ month: 'long', year: 'numeric' });
-const dfLocal = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+const dfLocal = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
 const fmtDate = (m) => dfDate.format(msOf(m));
 const fmtDateTime = (m) => `${dfDate.format(msOf(m))}, ${dfTime.format(msOf(m))}`;
 const minOfDate = (y, mo, d = 1) => (Date.UTC(y, mo, d) - EPOCH_MS) / 60000;
@@ -133,7 +133,7 @@ async function loadSource(fam, meta, ver) {
   const dv = new DataView(buf);
   const n = dv.getUint32(8, true);
   if (dv.getUint32(0, true) !== 0x534d5246 || dv.getUint32(12, true) !== REC || buf.byteLength < HDR + n * REC) {
-    throw new Error(`${meta.file}: unerwartetes Dateiformat`);
+    throw new Error(`${meta.file}: unexpected file format`);
   }
   const f32 = new Float32Array(buf, HDR, n * 7), u16 = new Uint16Array(buf, HDR, n * 14), u8 = new Uint8Array(buf, HDR, n * REC);
   const t = new Uint32Array(n);
@@ -318,7 +318,7 @@ function setPlaying(on) {
   state.playing = on;
   clearInterval(playTimer);
   ui.playBtn.setAttribute('aria-pressed', String(on));
-  ui.playBtn.setAttribute('aria-label', on ? 'Anhalten' : 'Abspielen');
+  ui.playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
   ui.playIcon.setAttribute('d', on ? 'M5.5 4.5h3v11h-3zM11.5 4.5h3v11h-3z' : 'M6 4.5v11l9-5.5z');
   if (!on) return;
   if (state.t1 >= state.full1) setWindow(state.full0, state.full0 + (state.t1 - state.t0));
@@ -509,7 +509,7 @@ function createTimeline(canvas) {
     if (b !== hover) { hover = b; draw(); }
     if (b >= 0) {
       showTip(e.clientX, e.clientY, [
-        ['v', `${nf0.format(hist.counts[b])} ${hist.counts[b] === 1 ? 'Detektion' : 'Detektionen'}`],
+        ['v', `${nf0.format(hist.counts[b])} ${hist.counts[b] === 1 ? 'detection' : 'detections'}`],
         ['l', binLabel(hist.unit, hist.edges[b])],
       ]);
     } else hideTip();
@@ -780,7 +780,7 @@ function satName(s) {
   if (m) return `GOES-${m[1]}`;
   m = /^Him(\d+)$/.exec(s);
   if (m) return `Himawari-${m[1]}`;
-  return s || 'unbekannt';
+  return s || 'unknown';
 }
 function describe(ref) {
   const { src, i } = ref, o = i * REC, { f32, u16, u8 } = src;
@@ -803,28 +803,28 @@ function showDetail(ref) {
   root.append(kind, el('div', 'pop-when', `${fmtDateTime(d.t)} UTC · ${dfLocal.format(msOf(d.t))}`));
   const dl = el('dl', 'pop-grid');
   const row = (k, v) => { dl.append(el('dt', null, k), el('dd', null, v)); };
-  row('Strahlungsleistung', d.frp >= 0 ? `${nf1.format(d.frp)} MW` : 'keine Angabe');
-  if (d.b1 > 0) row('Helligkeit bei 4 µm', `${nf1.format(d.b1)} K`);
-  if (d.b2 > 0) row('Helligkeit bei 11 µm', `${nf1.format(d.b2)} K`);
-  const cls = ['niedrig', 'nominal', 'hoch', 'keine Angabe'][d.cls];
-  row('Konfidenz', d.conf <= 100 ? `${d.conf} % (${cls})` : cls);
-  if (!d.dnUnknown) row('Aufnahme', d.night ? 'bei Nacht' : 'bei Tag');
-  if (d.scan > 0) row('Pixelgröße', src_geo(d.src) ? `etwa ${nf0.format(d.scan)} km` : `etwa ${nf2.format(d.scan)} × ${nf2.format(d.track)} km`);
+  row('Radiative power', d.frp >= 0 ? `${nf1.format(d.frp)} MW` : 'not given');
+  if (d.b1 > 0) row('Brightness at 4 µm', `${nf1.format(d.b1)} K`);
+  if (d.b2 > 0) row('Brightness at 11 µm', `${nf1.format(d.b2)} K`);
+  const cls = ['low', 'nominal', 'high', 'not given'][d.cls];
+  row('Confidence', d.conf <= 100 ? `${d.conf} % (${cls})` : cls);
+  if (!d.dnUnknown) row('Overpass', d.night ? 'night' : 'day');
+  if (d.scan > 0) row('Pixel size', src_geo(d.src) ? `about ${nf0.format(d.scan)} km` : `about ${nf2.format(d.scan)} × ${nf2.format(d.track)} km`);
   const inst = instrumentOf(d.src.fam, d.sat);
-  row('Satellit', `${satName(d.sat)}${inst ? ` · ${inst}` : ''}`);
-  row('Datenstand', `${d.nrt ? 'echtzeitnah (NRT)' : 'geprüft (SP)'}${d.ver ? `, Version ${d.ver}` : ''}`);
-  if (d.region < 16) row('Bundesland', REGIONS[d.region][1]);
-  else if (regions) row('Lage', 'außerhalb Deutschlands');
-  row('Koordinaten', `${nf5.format(d.lat)}° N, ${nf5.format(d.lon)}° O`);
+  row('Satellite', `${satName(d.sat)}${inst ? ` · ${inst}` : ''}`);
+  row('Data quality', `${d.nrt ? 'near real time (NRT)' : 'science quality (SP)'}${d.ver ? `, version ${d.ver}` : ''}`);
+  if (d.region < 16) row('State', REGIONS[d.region][1]);
+  else if (regions) row('Location', 'outside Germany');
+  row('Coordinates', `${nf5.format(d.lat)}° N, ${nf5.format(d.lon)}° E`);
   root.append(dl);
   if (CODE_TEXT[d.code][1]) root.append(el('div', 'pop-note', CODE_TEXT[d.code][1]));
   const links = el('div', 'pop-links');
-  const copy = el('button', null, 'Koordinaten kopieren');
+  const copy = el('button', null, 'Copy coordinates');
   copy.type = 'button';
   copy.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(`${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`); copy.textContent = 'Kopiert'; } catch (e) { copy.textContent = 'Kopieren nicht möglich'; }
+    try { await navigator.clipboard.writeText(`${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Copying is not possible'; }
   });
-  const wv = el('a', null, 'Satellitenbild bei NASA Worldview');
+  const wv = el('a', null, 'Satellite image in NASA Worldview');
   const iso = new Date(msOf(d.t)).toISOString().slice(0, 10);
   wv.href = `https://worldview.earthdata.nasa.gov/?v=${(d.lon - 0.9).toFixed(3)},${(d.lat - 0.45).toFixed(3)},${(d.lon + 0.9).toFixed(3)},${(d.lat + 0.45).toFixed(3)}&t=${iso}`;
   wv.target = '_blank';
@@ -833,7 +833,7 @@ function showDetail(ref) {
   root.append(links);
   const close = el('button', 'icon-btn detail-close');
   close.type = 'button';
-  close.setAttribute('aria-label', 'Einzelheiten schließen');
+  close.setAttribute('aria-label', 'Close details');
   close.textContent = '×';
   close.addEventListener('click', closeDetail);
   ui.detail.textContent = '';
@@ -870,7 +870,7 @@ async function fetchGeo(id) {
     if (hit) return await hit.json();
   } catch (e) { cache = null; }
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Grenzdaten ${id}: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Boundary data ${id}: HTTP ${res.status}`);
   if (cache) { try { await cache.put(url, res.clone()); } catch (e) { /* Cache voll oder gesperrt */ } }
   return res.json();
 }
@@ -957,10 +957,10 @@ function mapPadding() {
 }
 function initMap() {
   const esri = (path) => [`https://server.arcgisonline.com/ArcGIS/rest/services/${path}/MapServer/tile/{z}/{y}/{x}`];
-  const esriAttr = '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende';
-  const satAttr = 'Satellitenbild: © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics';
+  const esriAttr = '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  const satAttr = 'Imagery: © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics';
   // Weltweites Satellitenbild der NASA (Blue Marble, 500 m), liegt unter dem hochaufgeloesten Bild
-  const nasaAttr = 'Satellitenbild: NASA Blue Marble (GIBS)';
+  const nasaAttr = 'Imagery: NASA Blue Marble (GIBS)';
   const rs = (tiles, attribution, maxzoom) => ({ type: 'raster', tiles, tileSize: 256, attribution, maxzoom });
   const hid = { visibility: 'none' };
   const style = {
@@ -971,7 +971,7 @@ function initMap() {
       'base-light': rs(esri('Canvas/World_Light_Gray_Base'), esriAttr, 16),
       'labels-light': rs(esri('Canvas/World_Light_Gray_Reference'), '', 16),
       'sat-nasa': rs([NASA_TILES], nasaAttr, 8),
-      osm: rs(['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende', 19),
+      osm: rs(['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors', 19),
       'sat-blue': rs(esri('World_Imagery'), satAttr, 19),
     },
     layers: [
@@ -997,7 +997,7 @@ function initMap() {
   map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false, fitBoundsOptions: { maxZoom: 14 } }), 'top-right');
   map.addControl(new maplibregl.AttributionControl({
     compact: true,
-    customAttribution: 'Feuerdaten: <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">NASA FIRMS</a> · Grenzen: © EuroGeographics',
+    customAttribution: 'Fire data: <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">NASA FIRMS</a> · Boundaries: © EuroGeographics',
   }), 'bottom-right');
 
   let hoverEvt = null, hoverRaf = 0;
@@ -1060,7 +1060,7 @@ function checkTiles() {
   const isDown = (id) => { const st = tileStat[id]; return !!st && st.ok === 0 && st.err >= 3; };
   const baseDown = b === 'sat' ? isDown('sat-blue') && isDown('sat-nasa') : isDown(b === 'osm' ? 'osm' : b === 'light' ? 'base-light' : 'base-dark');
   const labelsDown = b === 'osm' ? isDown('osm') : isDown(b === 'light' ? 'labels-light' : 'labels-dark');
-  notice('tiles', baseDown ? 'Die Hintergrundkarte ist gerade nicht erreichbar. Gezeigt wird eine vereinfachte Karte aus den Ländergrenzen.' : '');
+  notice('tiles', baseDown ? 'The background map cannot be reached right now. A simplified map made of the borders is shown instead.' : '');
   // Fehlen die Beschriftungskacheln, zeichnet die Karte die Ortsnamen selbst (data/places.json)
   const want = labelsDown && b !== 'osm';
   if (want === tilesDown) return;
@@ -1137,7 +1137,7 @@ function updateSatDate() {
   const note = ui.satNote;
   if (state.basemap !== 'sat') { note.hidden = true; return; }
   note.hidden = false;
-  note.textContent = 'Wolkenfreies Satellitenbild (Esri/Maxar). Unabhängig vom gewählten Zeitraum.';
+  note.textContent = 'Cloud-free satellite image (NASA Blue Marble, Esri/Maxar). It does not change with the selected period.';
 }
 
 /* ------------------------------------------------------------------ Oberflaeche */
@@ -1162,7 +1162,7 @@ function buildUI() {
     $('#typeChips').append(b);
     return { n, sw };
   });
-  ['Niedrig', 'Nominal', 'Hoch'].forEach((name, k) => {
+  ['Low', 'Nominal', 'High'].forEach((name, k) => {
     const b = el('button', 'chip');
     b.type = 'button';
     b.setAttribute('aria-pressed', String(state.conf[k]));
@@ -1192,12 +1192,12 @@ function buildUI() {
   bindSeg($('#baseSeg'), () => state.basemap, (v) => { state.basemap = v; savePrefs(); applyBasemap(); });
   $('#frpMin').addEventListener('input', (e) => {
     state.frpMin = Number(e.target.value);
-    $('#frpMinOut').textContent = state.frpMin > 0 ? `ab ${state.frpMin} MW` : 'alle';
+    $('#frpMinOut').textContent = state.frpMin > 0 ? `from ${state.frpMin} MW` : 'all';
     filtersChanged();
   });
 
   const sel = $('#regionSel');
-  sel.append(new Option('Grenzen werden geladen …', '-2'));
+  sel.append(new Option('Loading boundaries …', '-2'));
   sel.disabled = true;
   sel.addEventListener('change', () => selectRegion(Number(sel.value), true));
   ui.regionSel = sel;
@@ -1255,17 +1255,17 @@ function showArea(a) {
 }
 function areaText(a) {
   const f = (v, pos, neg) => `${nf2.format(Math.abs(v))}° ${v >= 0 ? pos : neg}`;
-  return `${f(a[1], 'N', 'S')} bis ${f(a[3], 'N', 'S')}, ${f(a[0], 'O', 'W')} bis ${f(a[2], 'O', 'W')}`;
+  return `${f(a[1], 'N', 'S')} to ${f(a[3], 'N', 'S')}, ${f(a[0], 'E', 'W')} to ${f(a[2], 'E', 'W')}`;
 }
 function setArea(a) {
   state.area = a;
   const sel = ui.regionSel;
   let opt = sel.querySelector('option[value="-3"]');
-  if (a && !opt) { opt = new Option('Eigene Fläche', '-3'); sel.append(opt); }
+  if (a && !opt) { opt = new Option('Custom area', '-3'); sel.append(opt); }
   if (!a && opt) opt.remove();
   showArea(a);
   $('#areaClear').hidden = !a;
-  $('#areaHint').textContent = a ? `Gewählt: ${areaText(a)}.` : 'Rechteck auf der Karte aufziehen; danach zählt nur, was darin liegt.';
+  $('#areaHint').textContent = a ? `Selected: ${areaText(a)}.` : 'Drag a rectangle on the map. After that, only detections inside it are counted.';
   selectRegion(a ? -3 : (regions ? -1 : -2), false);
 }
 function bindAreaTool() {
@@ -1346,9 +1346,9 @@ function selectRegion(r, fit) {
 function regionsReady() {
   const sel = ui.regionSel;
   sel.textContent = '';
-  sel.append(new Option('Deutschland', '-1'));
+  sel.append(new Option('Germany', '-1'));
   REGIONS.forEach((r, k) => sel.append(new Option(r[1], String(k))));
-  sel.append(new Option('Deutschland mit Grenzregion', '-2'));
+  sel.append(new Option('Germany with border region', '-2'));
   sel.disabled = false;
   addRegionLayers();
   selectRegion(-1, false);
@@ -1369,21 +1369,21 @@ function renderLegend() {
     return;
   }
   const frp = state.color === 'frp';
-  root.append(el('div', 'legend-title', frp ? 'Strahlungsleistung je Detektion' : 'Zeitpunkt im gewählten Zeitraum'));
+  root.append(el('div', 'legend-title', frp ? 'Radiative power per detection' : 'Time within the selected period'));
   const ramp = el('div', 'ramp');
   ramp.style.background = `linear-gradient(to right, ${th.ramp.join(', ')})`;
   const ticks = el('div', 'ramp-ticks');
   const labels = frp ? ['1 MW', '10', '100', '1.000 MW'] : [fmtDate(state.t0), fmtDate(state.t1 - 1)];
   for (const l of labels) ticks.append(el('span', null, l));
   root.append(ramp, ticks);
-  root.append(el('p', 'hint', 'Größere Punkte bedeuten größere Strahlungsleistung.'));
-  if (th.additive) root.append(el('p', 'hint', 'Wo sich viele Punkte überlagern, wird die Karte heller.'));
+  root.append(el('p', 'hint', 'Larger dots mean higher radiative power.'));
+  if (th.additive) root.append(el('p', 'hint', 'Where many dots overlap, the map gets brighter.'));
 }
 function renderUI() {
   if (!stats) return;
   const aligned = state.t0 % DAY === 0 && state.t1 % DAY === 0, len = state.t1 - state.t0;
   const a = aligned ? fmtDate(state.t0) : fmtDateTime(state.t0), b = aligned ? fmtDate(state.t1 - 1) : fmtDateTime(state.t1);
-  const dur = len < DAY ? `${nf0.format(len / 60)} Std.` : len < 730 * DAY ? (len === DAY ? '1 Tag' : `${nf0.format(len / DAY)} Tage`) : `${nf1.format(len / DAY / 365.25)} Jahre`;
+  const dur = len < DAY ? `${nf0.format(len / 60)} h` : len < 730 * DAY ? (len === DAY ? '1 day' : `${nf0.format(len / DAY)} days`) : `${nf1.format(len / DAY / 365.25)} years`;
   ui.rangeText.textContent = a === b ? a : `${a} – ${b}`;
   ui.rangeText.append(el('small', null, `  ·  ${dur}`));
 
@@ -1393,10 +1393,10 @@ function renderUI() {
   if (stats.maxRef) {
     const d = describe(stats.maxRef);
     ui.statMax.textContent = fmtPower(d.frp);
-    ui.statMaxNote.textContent = `${fmtDate(d.t)}${d.region < 16 ? ` · ${REGIONS[d.region][1]}` : ''} · anzeigen`;
+    ui.statMaxNote.textContent = `${fmtDate(d.t)}${d.region < 16 ? ` · ${REGIONS[d.region][1]}` : ''} · show`;
   } else {
     ui.statMax.textContent = '–';
-    ui.statMaxNote.textContent = stats.count ? '' : 'Keine Detektionen im gewählten Zeitraum';
+    ui.statMaxNote.textContent = stats.count ? '' : 'No detections in the selected period';
   }
   ui.typeChips.forEach((c, gi) => { c.n.textContent = nf0.format(stats.byGroup[gi]); });
   for (const s of data) {
@@ -1425,8 +1425,8 @@ function openTable() {
   if (!hist) return;
   const body = $('#tableEl tbody');
   body.textContent = '';
-  const unit = { hour: 'Stunde', day: 'Tag', month: 'Monat', year: 'Jahr' }[hist.unit];
-  $('#tableNote').textContent = `Je ${unit}, im sichtbaren Ausschnitt der Zeitleiste und mit den Filtern der Karte.`;
+  const unit = { hour: 'hour', day: 'day', month: 'month', year: 'year' }[hist.unit];
+  $('#tableNote').textContent = `Per ${unit}, for the visible part of the timeline and with the filters of the map.`;
   for (let i = hist.counts.length - 1; i >= 0; i--) {
     const tr = el('tr');
     tr.append(el('td', null, binLabel(hist.unit, hist.edges[i])), el('td', 'num', nf0.format(hist.counts[i])));
@@ -1457,10 +1457,10 @@ async function init() {
   const fail = (msg) => { loading.classList.add('error'); $('#loadingText').textContent = msg; };
 
   const res = await fetch('data/manifest.json', { cache: 'no-store' }).catch(() => null);
-  if (!res || !res.ok) { fail('Es sind noch keine Daten vorhanden. Bitte zuerst „aktualisieren.bat“ ausführen und die Seite neu laden.'); return; }
+  if (!res || !res.ok) { fail('No data files were found. Build them first (see the README) and reload the page.'); return; }
   manifest = await res.json();
   const entries = Object.entries(manifest.sources || {}).filter(([, s]) => s.n > 0);
-  if (!entries.length) { fail('Die Datendateien sind leer. Bitte „aktualisieren.bat“ ausführen und die Seite neu laden.'); return; }
+  if (!entries.length) { fail('The data files are empty. Build them again (see the README) and reload the page.'); return; }
 
   const mapReady = initMap();
   const loaded = await Promise.all(entries.map(([fam, meta]) => loadSource(fam, meta, manifest.generated)));
@@ -1474,10 +1474,10 @@ async function init() {
   state.t1 = state.full1;
   state.t0 = Math.max(state.full0, state.full1 - 365 * DAY);
 
-  const stand = manifest.downloaded ? `${dfDate.format(new Date(manifest.downloaded))}, ${dfTime.format(new Date(manifest.downloaded))} UTC` : 'unbekannt';
-  $('#dataStatus').textContent = `${fmtCount(total)} Detektionen vom ${fmtDate(state.full0)} bis ${fmtDate(state.full1 - 1)}. Abruf bei der NASA: ${stand}.`;
+  const stand = manifest.downloaded ? `${dfDate.format(new Date(manifest.downloaded))}, ${dfTime.format(new Date(manifest.downloaded))} UTC` : 'unknown';
+  $('#dataStatus').textContent = `${fmtCount(total)} detections from ${fmtDate(state.full0)} to ${fmtDate(state.full1 - 1)}. Retrieved from NASA: ${stand}.`;
   if (manifest.missingMonths > 0) {
-    notice('archive', `Das Archiv ist noch unvollständig: ${nf0.format(manifest.missingMonths)} Monatsdateien fehlen. Läuft der Download noch, danach „aktualisieren.bat“ ausführen und neu laden.`);
+    notice('archive', `The archive is incomplete: ${nf0.format(manifest.missingMonths)} monthly files are missing.`);
   }
 
   compileFilter();
@@ -1489,9 +1489,9 @@ async function init() {
 
   const regionsLoad = loadRegions().then((r) => { regions = r; }).catch((e) => {
     console.warn(e);
-    notice('regions', 'Die Landesgrenzen ließen sich nicht laden (Eurostat GISCO nicht erreichbar). Gezeigt wird das ganze Rechteck um Deutschland; die Auswahl nach Bundesland fehlt.');
+    notice('regions', 'The state boundaries could not be loaded (Eurostat GISCO cannot be reached). The whole rectangle around Germany is shown; selection by state is not available.');
     ui.regionSel.textContent = '';
-    ui.regionSel.append(new Option('Rechteck um Deutschland', '-2'));
+    ui.regionSel.append(new Option('Rectangle around Germany', '-2'));
   });
   await Promise.race([regionsLoad, new Promise((r) => setTimeout(r, 7000))]);
   await mapReady;
@@ -1519,5 +1519,5 @@ init().catch((e) => {
   console.error(e);
   $('#loading').classList.add('error');
   $('#loading').classList.remove('done');
-  $('#loadingText').textContent = `Die Karte konnte nicht starten: ${e.message}`;
+  $('#loadingText').textContent = `The map could not start: ${e.message}`;
 });

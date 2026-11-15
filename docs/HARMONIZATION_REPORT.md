@@ -450,6 +450,5 @@ gradient-boosting model is worse than a monthly factor for the calendar's purpos
 has to be chosen per region from the validation, and the use-case metric must be part of
 that choice, not only the MAE.
 
-**Web app.** `docs/germany/` is the teammate's point map of this archive with the harmonized
-calendar added (`calendar.js`). Its interface is in German and must be translated before it is
-linked from the submission.
+**Web app.** The start page of `docs/` is the teammate's point map of this archive with the
+harmonized calendar added (`calendar.js`).

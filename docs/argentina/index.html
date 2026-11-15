@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wildfire Calendar Argentina</title>
+<meta name="description" content="Monthly burning activity in Argentina from 2000 to 2025, with MODIS and VIIRS hot spots expressed on one scale.">
+<link rel="preload" href="app/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body>
+
+<header class="mast">
+  <div class="mast-title">
+    <p class="eyebrow">NASA Space Apps 2026 · Harmonization of MODIS and VIIRS Hot Spots</p>
+    <h1>Wildfire Calendar <span class="h1-region">Argentina</span></h1>
+    <p class="lede">Twenty-five years of satellite fire detections on one scale. MODIS months before 2012 are converted to the count VIIRS would have reported, so a month in 2003 can be compared with a month in 2023.</p>
+  </div>
+  <dl class="sheet-facts" aria-label="Sheet facts">
+    <div><dt>Record</dt><dd id="fact-record">2000-11 to 2025-12</dd></div>
+    <div><dt>Grid</dt><dd>0.25° × 0.25°</dd></div>
+    <div><dt>Time unit</dt><dd>calendar month, UTC</dd></div>
+    <div><dt>Unit</dt><dd>VIIRS-equivalent hot spots</dd></div>
+  </dl>
+</header>
+
+<main class="sheet">
+
+  <section class="plate" aria-labelledby="plate-h">
+    <div class="panel-head">
+      <h2 id="plate-h">Area</h2>
+      <p class="hint">Drag on the map to select an area, or type its edges.</p>
+    </div>
+    <div class="map-wrap" id="map-wrap">
+      <canvas id="map" role="img" aria-label="Map of Argentina with fire activity per 0.25 degree cell"></canvas>
+    </div>
+    <p class="map-caption" id="map-caption"></p>
+    <div class="scale-legend" aria-hidden="true">
+      <canvas id="map-legend" height="10"></canvas>
+      <div class="scale-ticks"><span>1</span><span>10</span><span>100</span><span>1,000</span></div>
+      <p class="scale-label">hot spots per cell and month, log scale</p>
+    </div>
+    <form class="bbox" id="bbox-form" autocomplete="off">
+      <label for="bb-n">North<input id="bb-n" type="number" step="0.25" inputmode="decimal"></label>
+      <label for="bb-s">South<input id="bb-s" type="number" step="0.25" inputmode="decimal"></label>
+      <label for="bb-w">West<input id="bb-w" type="number" step="0.25" inputmode="decimal"></label>
+      <label for="bb-e">East<input id="bb-e" type="number" step="0.25" inputmode="decimal"></label>
+      <button type="submit" class="btn">Apply</button>
+      <button type="button" class="btn btn-quiet" id="bbox-reset">Whole country</button>
+    </form>
+    <p class="form-msg" id="bbox-msg" role="status"></p>
+  </section>
+
+  <section class="cal" aria-labelledby="cal-h">
+    <div class="panel-head">
+      <h2 id="cal-h">Calendar <span class="sel-name" id="sel-name"></span></h2>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Count type">
+          <button type="button" id="mode-harm" aria-pressed="true">Harmonized</button>
+          <button type="button" id="mode-raw" aria-pressed="false">Raw sensor counts</button>
+        </div>
+        <label class="range" for="y0">Years
+          <select id="y0"></select><span aria-hidden="true">to</span><select id="y1" aria-label="Last year"></select>
+        </label>
+      </div>
+    </div>
+    <p class="mode-note" id="mode-note"></p>
+
+    <div class="grid" id="grid" role="grid" aria-label="Hot spots per month"></div>
+
+    <div class="cal-legend">
+      <div class="scale-legend">
+        <canvas id="cal-legend" height="10"></canvas>
+        <div class="scale-ticks" id="cal-ticks"></div>
+        <p class="scale-label">hot spots per month in the selected area, log scale</p>
+      </div>
+      <ul class="keys">
+        <li><span class="key key-model"></span>modeled from MODIS</li>
+        <li><span class="key key-obs"></span>observed by VIIRS</li>
+        <li><span class="key key-hot"></span>year above the mean</li>
+        <li><span class="key key-cold"></span>year below the mean</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="reading" aria-labelledby="read-h">
+    <h2 id="read-h">Reading</h2>
+    <div class="reading-body">
+      <div class="month-read" id="month-read" aria-live="polite"></div>
+      <dl class="highlights" id="highlights"></dl>
+    </div>
+    <div class="downloads">
+      <button type="button" class="btn" id="dl-month">Download monthly series (CSV)</button>
+      <button type="button" class="btn" id="dl-cell">Download cell counts (CSV)</button>
+      <p class="hint">Both files cover the selected area and years. The cell file lists counts per 0.25° cell and month. Individual hot-spot records are not included in this demo.</p>
+    </div>
+  </section>
+
+  <section class="notes" aria-labelledby="notes-h">
+    <h2 id="notes-h">How to read these numbers</h2>
+    <div class="notes-cols">
+      <div>
+        <h3>Why harmonize</h3>
+        <p id="note-why"></p>
+      </div>
+      <div>
+        <h3>How it was checked</h3>
+        <p id="note-check"></p>
+      </div>
+      <div>
+        <h3>Limits</h3>
+        <p>A gap in satellite coverage looks like a quiet month; it is not the same as no fire. Months before July 2002 rest on one satellite (Terra) and are the least certain. The uncertainty range is valid for the whole country only. Counts are vegetation fires (FIRMS type 0); static industrial sources are excluded. The archive ends in December 2025.</p>
+      </div>
+    </div>
+    <p class="credits">Data: NASA FIRMS, MODIS Collection 6.1 (Terra, Aqua) and VIIRS 375 m (S-NPP, NOAA-20), country yearly summary archive. We acknowledge the use of data from NASA's Fire Information for Resource Management System (FIRMS), part of NASA's Earth Science Data and Information System (ESDIS). Country outlines: Natural Earth. Typefaces: Archivo and Chivo Mono by Omnibus-Type, Buenos Aires. Code and analysis were generated with Claude (Anthropic) from the team's task description. <a href="../HARMONIZATION_REPORT.md">Full method report</a>. <a href="../">Fire map of Germany with point data</a>.</p>
+  </section>
+</main>
+
+<div class="tip" id="tip" hidden></div>
+<script src="app/app.js"></script>
+</body>
+</html>

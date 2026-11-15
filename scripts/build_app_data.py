@@ -5,10 +5,10 @@ Usage:
     python scripts/build_app_data.py --region Argentina
 
 Reads  data/harmonized/{region}_cell_month.parquet, {region}_monthly.csv, {region}_metrics.json
-Writes docs/app/data/meta.json   grid, cell list, months, country-level interval, method summary
-       docs/app/data/harm.bin    uint16 [months x cells], harmonized VIIRS-equivalent counts,
+Writes {out}/meta.json             grid, cell list, months, country-level interval, method summary
+       {out}/harm.bin              uint16 [months x cells], harmonized VIIRS-equivalent counts,
                                  stored as round(sqrt(value) * K) so small values keep precision
-       docs/app/data/modis.bin   uint16 [modeled months x cells], raw MODIS counts (Terra + Aqua)
+       {out}/modis.bin             uint16 [modeled months x cells], raw MODIS counts (Terra + Aqua)
                                  for the months before the VIIRS record (used by the "raw" view)
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--region", required=True)
     ap.add_argument("--harmonized", default="data/harmonized")
-    ap.add_argument("--out", default="docs/app/data")
+    ap.add_argument("--out", default="docs/argentina/app/data")
     args = ap.parse_args()
     key = args.region.lower()
     src = Path(args.harmonized)
