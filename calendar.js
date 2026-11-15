@@ -1,16 +1,16 @@
-/* Harmonisierter Brandkalender fuer die Feuerkarte.
-   Daten: data/harm/meta.json, harm.bin, modis.bin (scripts/build_app_data.py --region Germany).
-   Haengt sich ueber window.feuerkarte an die Karte: Gebiet lesen, Zeitfenster setzen. */
+/* Harmonized fire calendar for the fire map.
+   Data: data/harm/meta.json, harm.bin, modis.bin (scripts/build_app_data.py --region Germany).
+   Hooks into the map through window.feuerkarte: reads the selected area, sets the time window. */
 const $ = (s) => document.querySelector(s);
-const MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-const MON_L = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MON_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const RAMPS = {
   dark: ['#3a1410', '#7d2414', '#d1401f', '#f1801e', '#fab02a', '#fddc58', '#fff7c2'],
   light: ['#fbe3c4', '#f3b46a', '#e06714', '#c22d24', '#a3182f', '#7d1036', '#3f0a2e'],
 };
 const EPOCH_MS = Date.UTC(2000, 0, 1);
-const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
-const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 const fmt = (v) => (v >= 100 ? nf0.format(v) : nf1.format(v));
 const median = (a) => {
   if (!a.length) return NaN;
@@ -55,11 +55,11 @@ async function load() {
 }
 
 function regionName(r) {
-  if (r === -2) return 'Deutschland mit Grenzregion';
-  if (r === -1) return 'Deutschland';
-  if (r === -3) return 'Eigene Fläche';
+  if (r === -2) return 'Germany with border region';
+  if (r === -1) return 'Germany';
+  if (r === -3) return 'Custom area';
   const opt = $('#regionSel').querySelector(`option[value="${r}"]`);
-  return opt ? opt.textContent : 'Gebiet';
+  return opt ? opt.textContent : 'Area';
 }
 
 function compute() {
@@ -84,10 +84,10 @@ function compute() {
 }
 
 function sourceOf(t) {
-  if (t >= D.meta.n_modeled) return 'beobachtet von VIIRS (Suomi NPP)';
+  if (t >= D.meta.n_modeled) return 'observed by VIIRS (Suomi NPP)';
   const terra = D.meta.months[t] <= D.meta.terra_only_until;
-  if (S.mode === 'raw') return terra ? 'MODIS (nur Terra), Rohzählung' : 'MODIS (Terra und Aqua), Rohzählung';
-  return terra ? 'aus MODIS (nur Terra) umgerechnet' : 'aus MODIS (Terra und Aqua) umgerechnet';
+  if (S.mode === 'raw') return terra ? 'MODIS (Terra only), raw count' : 'MODIS (Terra and Aqua), raw count';
+  return terra ? 'converted from MODIS (Terra only)' : 'converted from MODIS (Terra and Aqua)';
 }
 
 function drawGrid() {
@@ -95,7 +95,7 @@ function drawGrid() {
   const f = document.createDocumentFragment();
   f.append(el('div', 'cg-head', ''));
   MON.forEach((m) => f.append(el('div', 'cg-head', m)));
-  f.append(el('div', 'cg-head cg-sum', 'Jahr'));
+  f.append(el('div', 'cg-head cg-sum', 'Year'));
   const y0 = D.year[0], y1 = D.year[D.T - 1];
   for (let y = y0; y <= y1; y++) {
     f.append(el('div', 'cg-year', String(y)));
@@ -104,7 +104,7 @@ function drawGrid() {
       const t = D.meta.months.indexOf(`${y}-${String(m + 1).padStart(2, '0')}`);
       const b = el('button', 'cg-cell');
       b.type = 'button';
-      if (t < 0) { b.disabled = true; b.classList.add('is-void'); b.setAttribute('aria-label', `${MON_L[m]} ${y}: keine Daten`); }
+      if (t < 0) { b.disabled = true; b.classList.add('is-void'); b.setAttribute('aria-label', `${MON_L[m]} ${y}: no data`); }
       else {
         const v = R.series[t];
         total += v; n++;
@@ -113,11 +113,11 @@ function drawGrid() {
         if (t === S.t) b.classList.add('is-picked');
         b.dataset.t = t;
         b.title = `${MON_L[m]} ${y}: ${fmt(v)}`;
-        b.setAttribute('aria-label', `${MON_L[m]} ${y}: ${fmt(v)} Detektionen`);
+        b.setAttribute('aria-label', `${MON_L[m]} ${y}: ${fmt(v)} detections`);
       }
       f.append(b);
     }
-    f.append(el('div', 'cg-sum', n === 12 ? fmt(total) : `${fmt(total)} (${n} Mon.)`));
+    f.append(el('div', 'cg-sum', n === 12 ? fmt(total) : `${fmt(total)} (${n} mo)`));
   }
   f.append(el('div', 'cg-year', 'Median'));
   R.med.forEach((v) => f.append(el('div', 'cg-med', isFinite(v) ? fmt(v) : '')));
@@ -131,33 +131,33 @@ function drawReading() {
   const peers = R.byCal[m];
   const rank = peers.filter((p) => R.series[p] > v).length + 1;
   const box = $('#calRead');
-  const head = S.t !== null ? 'Gewählter Monat' : 'Jüngster vollständiger Monat';
+  const head = S.t !== null ? 'Selected month' : 'Latest complete month';
   let verdict;
-  if (!(md > 0)) verdict = `In einem typischen ${MON_L[m]} gibt es hier keine Detektionen (Median 0).`;
+  if (!(md > 0)) verdict = `A typical ${MON_L[m]} has no detections here (median 0).`;
   else {
     const pct = Math.abs(Math.round((v / md - 1) * 100));
-    const word = v > md ? 'über' : v < md ? 'unter' : 'auf';
-    verdict = `<span class="cal-tag ${v > md ? 'up' : 'down'}">${word} dem Median</span> ${pct} % ${v > md ? 'mehr' : 'weniger'} als in einem typischen ${MON_L[m]} (Median ${fmt(md)}). Rang ${rank} von ${peers.length}.`;
+    const word = v > md ? 'above' : v < md ? 'below' : 'at';
+    verdict = `<span class="cal-tag ${v > md ? 'up' : 'down'}">${word} the median</span> ${pct} % ${v > md ? 'more' : 'less'} than a typical ${MON_L[m]} (median ${fmt(md)}). Rank ${rank} of ${peers.length}.`;
   }
   box.innerHTML = `<p class="cal-when">${head}: ${MON_L[m]} ${D.year[t]}</p><p class="cal-big">${fmt(v)}</p>` +
-    `<p class="cal-unit">${S.mode === 'harm' ? 'VIIRS-äquivalente Detektionen' : 'Detektionen, wie vom Sensor geliefert'}</p>` +
-    `<p class="cal-verdict">${verdict}</p><p class="hint">Quelle: ${sourceOf(t)}.</p>`;
-  $('#calShow').textContent = `${MON_L[m]} ${D.year[t]} auf der Karte zeigen`;
+    `<p class="cal-unit">${S.mode === 'harm' ? 'VIIRS-equivalent detections' : 'detections as delivered by the sensor'}</p>` +
+    `<p class="cal-verdict">${verdict}</p><p class="hint">Source: ${sourceOf(t)}.</p>`;
+  $('#calShow').textContent = `Show ${MON_L[m]} ${D.year[t]} on the map`;
   $('#calShow').dataset.t = t;
 }
 
 function drawNotes() {
   const v = D.meta.validation, m = v.methods, c = m[v.chosen];
   $('#calNote').textContent = S.mode === 'harm'
-    ? 'Jeder Monat steht in VIIRS-äquivalenten Detektionen. Monate mit Punkt sind aus MODIS umgerechnet, ab Februar 2012 zählt VIIRS selbst.'
-    : `Rohzählung: bis Januar 2012 MODIS, danach VIIRS. VIIRS meldet hier rund ${nf1.format(v.snpp_over_modis)}-mal so viele Detektionen, deshalb wirken die oberen Zeilen ruhiger, als sie waren.`;
-  $('#calCheck').textContent = `Geprüft an den Jahren 2012–2025, jeweils ein Jahr zurückgehalten: Die Umrechnung (ein Faktor je Kalendermonat) verfehlt die Monatssumme im Mittel um ${fmt(c.mae)} Detektionen bei typisch ${fmt(v.mean_monthly_snpp)} pro Monat und trifft „über oder unter dem Median“ in ${Math.round(c.median_agreement * 100)} % der Monate. ` +
-    'In Deutschland sieht MODIS nur wenige Vegetationsbrände; die Werte vor 2012 sind deshalb grobe Schätzungen. Gezählt werden Vegetationsbrände aller Konfidenzstufen im 0,25°-Raster; kleine Länder bestehen aus wenigen Zellen. November 2026 ist unvollständig und fehlt.';
+    ? 'Every month is in VIIRS-equivalent detections. Months with a dot are converted from MODIS; from February 2012 the counts are observed by VIIRS.'
+    : `Raw counts: MODIS until January 2012, VIIRS after. VIIRS reports about ${nf1.format(v.snpp_over_modis)} times as many detections here, so the upper rows look quieter than they were.`;
+  $('#calCheck').textContent = `Checked on 2012–2025 with one year held out at a time: the conversion (one factor per calendar month) misses the monthly total by ${fmt(c.mae)} detections on average, against a typical ${fmt(v.mean_monthly_snpp)} per month, and agrees with VIIRS on “above or below the median” in ${Math.round(c.median_agreement * 100)} % of months. ` +
+    'MODIS sees only few vegetation fires in Germany, so the values before 2012 are rough estimates. Counted are vegetation fires of all confidence levels on a 0.25° grid; small states and small areas consist of few cells. November 2026 is incomplete and not included.';
 }
 
 function render() {
   compute();
-  $('#calTitle').textContent = `Harmonisierter Brandkalender · ${regionName(R.r)}`;
+  $('#calTitle').textContent = `Harmonized fire calendar · ${regionName(R.r)}`;
   $('#calHarm').setAttribute('aria-pressed', String(S.mode === 'harm'));
   $('#calRaw').setAttribute('aria-pressed', String(S.mode === 'raw'));
   drawGrid();
@@ -169,8 +169,8 @@ async function open() {
   const dlg = $('#calDlg');
   if (!D) {
     try { await load(); } catch (e) {
-      $('#calTitle').textContent = 'Harmonisierter Brandkalender';
-      $('#calNote').textContent = 'Die Kalenderdaten fehlen (data/harm). Bitte scripts/build_app_data.py ausführen.';
+      $('#calTitle').textContent = 'Harmonized fire calendar';
+      $('#calNote').textContent = 'The calendar data is missing (data/harm). Run scripts/build_app_data.py.';
       dlg.showModal();
       return;
     }

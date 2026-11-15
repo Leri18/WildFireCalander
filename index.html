@@ -1,122 +1,199 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wildfire Calendar Argentina</title>
-<meta name="description" content="Monthly burning activity in Argentina from 2000 to 2025, with MODIS and VIIRS hot spots expressed on one scale.">
-<link rel="preload" href="app/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="app/style.css">
+<title>Fire Map Germany</title>
+<meta name="description" content="Satellite fire detections over Germany since 2000 from NASA FIRMS, with a harmonized MODIS and VIIRS burning-activity calendar.">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="map" aria-label="Map of fire detections"></div>
 
-<header class="mast">
-  <div class="mast-title">
-    <p class="eyebrow">NASA Space Apps 2026 · Harmonization of MODIS and VIIRS Hot Spots</p>
-    <h1>Wildfire Calendar <span class="h1-region">Argentina</span></h1>
-    <p class="lede">Twenty-five years of satellite fire detections on one scale. MODIS months before 2012 are converted to the count VIIRS would have reported, so a month in 2003 can be compared with a month in 2023.</p>
-  </div>
-  <dl class="sheet-facts" aria-label="Sheet facts">
-    <div><dt>Record</dt><dd id="fact-record">2000-11 to 2025-12</dd></div>
-    <div><dt>Grid</dt><dd>0.25° × 0.25°</dd></div>
-    <div><dt>Time unit</dt><dd>calendar month, UTC</dd></div>
-    <div><dt>Unit</dt><dd>VIIRS-equivalent hot spots</dd></div>
-  </dl>
-</header>
+<button id="panelToggle" class="icon-btn" type="button" aria-controls="panel" aria-expanded="true" title="Show or hide the side panel">
+  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+</button>
 
-<main class="sheet">
+<aside id="panel" aria-label="Key figures and filters">
+  <header class="head">
+    <h1>Fire Map Germany</h1>
+    <p class="sub">Active fires and heat sources detected by satellites. Source: NASA FIRMS.</p>
+    <p class="status" id="dataStatus">Loading data …</p>
+    <p class="notice" id="notice" hidden></p>
+    <button type="button" class="cal-open" id="calBtn" disabled>
+      <span class="cal-open-t">Harmonized fire calendar</span>
+      <span class="cal-open-s">Every month since 2000 on one scale, MODIS and VIIRS made comparable</span>
+    </button>
+  </header>
 
-  <section class="plate" aria-labelledby="plate-h">
-    <div class="panel-head">
-      <h2 id="plate-h">Area</h2>
-      <p class="hint">Drag on the map to select an area, or type its edges.</p>
+  <section class="tiles" aria-label="Key figures for the selected period">
+    <div class="tile">
+      <div class="tile-label">Detections</div>
+      <div class="tile-value" id="statCount">–</div>
     </div>
-    <div class="map-wrap" id="map-wrap">
-      <canvas id="map" role="img" aria-label="Map of Argentina with fire activity per 0.25 degree cell"></canvas>
+    <div class="tile">
+      <div class="tile-label">Radiative power, total</div>
+      <div class="tile-value" id="statFrp">–</div>
     </div>
-    <p class="map-caption" id="map-caption"></p>
-    <div class="scale-legend" aria-hidden="true">
-      <canvas id="map-legend" height="10"></canvas>
-      <div class="scale-ticks"><span>1</span><span>10</span><span>100</span><span>1,000</span></div>
-      <p class="scale-label">hot spots per cell and month, log scale</p>
-    </div>
-    <form class="bbox" id="bbox-form" autocomplete="off">
-      <label for="bb-n">North<input id="bb-n" type="number" step="0.25" inputmode="decimal"></label>
-      <label for="bb-s">South<input id="bb-s" type="number" step="0.25" inputmode="decimal"></label>
-      <label for="bb-w">West<input id="bb-w" type="number" step="0.25" inputmode="decimal"></label>
-      <label for="bb-e">East<input id="bb-e" type="number" step="0.25" inputmode="decimal"></label>
-      <button type="submit" class="btn">Apply</button>
-      <button type="button" class="btn btn-quiet" id="bbox-reset">Whole country</button>
-    </form>
-    <p class="form-msg" id="bbox-msg" role="status"></p>
+    <button class="tile tile-btn" id="statMaxBtn" type="button" title="Go to the strongest detection">
+      <div class="tile-label">Strongest detection</div>
+      <div class="tile-value" id="statMax">–</div>
+      <div class="tile-note" id="statMaxNote"></div>
+    </button>
   </section>
 
-  <section class="cal" aria-labelledby="cal-h">
-    <div class="panel-head">
-      <h2 id="cal-h">Calendar <span class="sel-name" id="sel-name"></span></h2>
-      <div class="controls">
-        <div class="seg" role="group" aria-label="Count type">
-          <button type="button" id="mode-harm" aria-pressed="true">Harmonized</button>
-          <button type="button" id="mode-raw" aria-pressed="false">Raw sensor counts</button>
+  <section>
+    <h2>Type of source</h2>
+    <div class="chips" id="typeChips" role="group" aria-label="Type of source"></div>
+    <p class="hint">Classification by NASA. It is not yet available for the most recent months; known industrial sites are derived there from the older data.</p>
+  </section>
+
+  <section>
+    <h2>Colour</h2>
+    <div class="seg" id="colorSeg" role="group" aria-label="Colour of the dots">
+      <button type="button" data-v="frp">Intensity</button>
+      <button type="button" data-v="time">Time</button>
+      <button type="button" data-v="type">Type</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Area</h2>
+    <select id="regionSel" aria-label="Area"></select>
+    <div class="area-tools">
+      <button type="button" class="area-btn" id="areaDraw" aria-pressed="false">Select an area</button>
+      <button type="button" class="text-btn" id="areaClear" hidden>Clear selection</button>
+    </div>
+    <p class="hint" id="areaHint">Drag a rectangle on the map. After that, only detections inside it are counted.</p>
+    <div class="ranks" id="regionRanks" aria-label="Detections by state"></div>
+  </section>
+
+  <details class="settings" id="settings">
+    <summary>Settings</summary>
+
+    <section>
+      <h2>Sensors</h2>
+      <div class="checks" id="srcChecks"></div>
+    </section>
+
+    <section>
+      <h2>More filters</h2>
+      <div class="row stack">
+        <span class="row-label">Confidence</span>
+        <div class="chips" id="confChips" role="group" aria-label="Confidence"></div>
+      </div>
+      <div class="row">
+        <label class="row-label" for="frpMin">Minimum power</label>
+        <input type="range" id="frpMin" min="0" max="100" step="1" value="0">
+        <output id="frpMinOut" for="frpMin">all</output>
+      </div>
+      <div class="row">
+        <span class="row-label">Time of day</span>
+        <div class="seg small" id="dnSeg" role="group" aria-label="Time of day of the overpass">
+          <button type="button" data-v="0">Both</button>
+          <button type="button" data-v="1">Day</button>
+          <button type="button" data-v="2">Night</button>
         </div>
-        <label class="range" for="y0">Years
-          <select id="y0"></select><span aria-hidden="true">to</span><select id="y1" aria-label="Last year"></select>
-        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Map</h2>
+      <div class="seg" id="baseSeg" role="group" aria-label="Map style">
+        <button type="button" data-v="dark">Dark</button>
+        <button type="button" data-v="light">Light</button>
+        <button type="button" data-v="sat">Satellite</button>
+        <button type="button" data-v="osm">Streets</button>
+      </div>
+      <p class="hint" id="satNote" hidden></p>
+    </section>
+  </details>
+
+  <footer class="foot">
+    <p><a href="HARMONIZATION_REPORT.md">Method report</a> · <a href="argentina/">Validated example: Argentina</a></p>
+    <p>Fire data: NASA FIRMS (MODIS Collection 6.1, VIIRS 375 m, Meteosat). Imagery: NASA Blue Marble (GIBS), Esri. Street map: © OpenStreetMap contributors. Boundaries: © EuroGeographics, Eurostat GISCO. Place names: GeoNames. Times in UTC.</p>
+    <p>We acknowledge the use of data from NASA's Fire Information for Resource Management System (FIRMS), part of NASA's Earth Science Data and Information System (ESDIS).</p>
+    <p>NASA Space Apps 2026, challenge “Harmonization of MODIS and VIIRS Hot Spots”. Parts of the code and the harmonization analysis were generated with Claude (Anthropic).</p>
+  </footer>
+</aside>
+
+<section id="timeline" aria-label="Timeline">
+  <div class="tl-head">
+    <div class="tl-presets" role="group" aria-label="Choose a period">
+      <button type="button" data-preset="7">7 days</button>
+      <button type="button" data-preset="30">30 days</button>
+      <button type="button" data-preset="365">12 months</button>
+      <button type="button" data-preset="all">All</button>
+      <select id="yearSel" aria-label="Choose a year"><option value="">Year …</option></select>
+    </div>
+    <div class="tl-range" id="rangeText" aria-live="polite"></div>
+    <div class="tl-tools">
+      <button type="button" class="icon-btn" id="stepBack" title="Previous period (left arrow)" aria-label="Previous period">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="playBtn" title="Play through the periods" aria-label="Play" aria-pressed="false">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path id="playIcon" d="M6 4.5v11l9-5.5z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="stepFwd" title="Next period (right arrow)" aria-label="Next period">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </button>
+      <button type="button" class="text-btn" id="viewAll" title="Show the whole record in the timeline again">Whole timeline</button>
+      <button type="button" class="text-btn" id="tableBtn" title="Show the timeline values as a table">Table</button>
+      <button type="button" class="text-btn" id="csvBtn" title="Save the detections shown as a CSV file">CSV</button>
+    </div>
+  </div>
+  <div class="tl-plot">
+    <canvas id="tlCanvas" tabindex="0" role="img" aria-label="Detections over time. The arrow keys move the selected period."></canvas>
+  </div>
+</section>
+
+<aside id="detail" aria-label="Details of the selected detection" aria-live="polite" hidden></aside>
+
+<div id="tip" role="tooltip" hidden></div>
+
+<div id="loading"><div class="spinner" aria-hidden="true"></div><div id="loadingText">Loading fire data …</div></div>
+
+<dialog id="tableDlg" aria-labelledby="tableTitle">
+  <div class="dlg-head">
+    <h2 id="tableTitle">Detections over time</h2>
+    <button type="button" class="icon-btn" id="tableClose" aria-label="Close">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    </button>
+  </div>
+  <p class="hint" id="tableNote"></p>
+  <div class="dlg-body"><table id="tableEl"><thead><tr><th>Period</th><th class="num">Detections</th></tr></thead><tbody></tbody></table></div>
+</dialog>
+
+<dialog id="calDlg" class="cal-dlg" aria-labelledby="calTitle">
+  <div class="dlg-head">
+    <h2 id="calTitle">Harmonized fire calendar</h2>
+    <button type="button" class="icon-btn" id="calClose" aria-label="Close">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    </button>
+  </div>
+  <div class="cal-body">
+    <div class="cal-top">
+      <div class="seg" role="group" aria-label="Count type">
+        <button type="button" id="calHarm" aria-pressed="true">Harmonized</button>
+        <button type="button" id="calRaw" aria-pressed="false">Raw counts</button>
+      </div>
+      <p class="hint" id="calNote"></p>
+    </div>
+    <div class="cal-main">
+      <div class="cal-grid" id="calGrid" role="grid" aria-label="Detections per month"></div>
+      <div class="cal-side">
+        <div id="calRead" aria-live="polite"></div>
+        <button type="button" class="cal-show" id="calShow"></button>
+        <p class="hint" id="calCheck"></p>
       </div>
     </div>
-    <p class="mode-note" id="mode-note"></p>
+  </div>
+</dialog>
 
-    <div class="grid" id="grid" role="grid" aria-label="Hot spots per month"></div>
-
-    <div class="cal-legend">
-      <div class="scale-legend">
-        <canvas id="cal-legend" height="10"></canvas>
-        <div class="scale-ticks" id="cal-ticks"></div>
-        <p class="scale-label">hot spots per month in the selected area, log scale</p>
-      </div>
-      <ul class="keys">
-        <li><span class="key key-model"></span>modeled from MODIS</li>
-        <li><span class="key key-obs"></span>observed by VIIRS</li>
-        <li><span class="key key-hot"></span>year above the mean</li>
-        <li><span class="key key-cold"></span>year below the mean</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="reading" aria-labelledby="read-h">
-    <h2 id="read-h">Reading</h2>
-    <div class="reading-body">
-      <div class="month-read" id="month-read" aria-live="polite"></div>
-      <dl class="highlights" id="highlights"></dl>
-    </div>
-    <div class="downloads">
-      <button type="button" class="btn" id="dl-month">Download monthly series (CSV)</button>
-      <button type="button" class="btn" id="dl-cell">Download cell counts (CSV)</button>
-      <p class="hint">Both files cover the selected area and years. The cell file lists counts per 0.25° cell and month. Individual hot-spot records are not included in this demo.</p>
-    </div>
-  </section>
-
-  <section class="notes" aria-labelledby="notes-h">
-    <h2 id="notes-h">How to read these numbers</h2>
-    <div class="notes-cols">
-      <div>
-        <h3>Why harmonize</h3>
-        <p id="note-why"></p>
-      </div>
-      <div>
-        <h3>How it was checked</h3>
-        <p id="note-check"></p>
-      </div>
-      <div>
-        <h3>Limits</h3>
-        <p>A gap in satellite coverage looks like a quiet month; it is not the same as no fire. Months before July 2002 rest on one satellite (Terra) and are the least certain. The uncertainty range is valid for the whole country only. Counts are vegetation fires (FIRMS type 0); static industrial sources are excluded. The archive ends in December 2025.</p>
-      </div>
-    </div>
-    <p class="credits">Data: NASA FIRMS, MODIS Collection 6.1 (Terra, Aqua) and VIIRS 375 m (S-NPP, NOAA-20), country yearly summary archive. We acknowledge the use of data from NASA's Fire Information for Resource Management System (FIRMS), part of NASA's Earth Science Data and Information System (ESDIS). Country outlines: Natural Earth. Typefaces: Archivo and Chivo Mono by Omnibus-Type, Buenos Aires. Code and analysis were generated with Claude (Anthropic) from the team's task description. <a href="HARMONIZATION_REPORT.md">Full method report</a>.</p>
-  </section>
-</main>
-
-<div class="tip" id="tip" hidden></div>
-<script src="app/app.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script type="module" src="app.js"></script>
+<script type="module" src="calendar.js"></script>
 </body>
 </html>
