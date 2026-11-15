@@ -1061,16 +1061,52 @@ function checkTiles() {
   const baseDown = b === 'sat' ? isDown('sat-blue') && isDown('sat-nasa') : isDown(b === 'osm' ? 'osm' : b === 'light' ? 'base-light' : 'base-dark');
   const labelsDown = b === 'osm' ? isDown('osm') : isDown(b === 'light' ? 'labels-light' : 'labels-dark');
   notice('tiles', baseDown ? 'Die Hintergrundkarte ist gerade nicht erreichbar. Gezeigt wird eine vereinfachte Karte aus den Ländergrenzen.' : '');
-  if (labelsDown === tilesDown) return;
-  tilesDown = labelsDown;
-  if (!cityMarkers) {
-    cityMarkers = CITIES.map(([name, lon, lat]) => {
-      const e = el('div', 'city');
-      e.append(el('span', 'city-dot'), el('span', null, name));
-      return new maplibregl.Marker({ element: e, anchor: 'left', offset: [-3, 0] }).setLngLat([lon, lat]);
-    });
+  // Fehlen die Beschriftungskacheln, zeichnet die Karte die Ortsnamen selbst (data/places.json)
+  const want = labelsDown && b !== 'osm';
+  if (want === tilesDown) return;
+  tilesDown = want;
+  drawPlaces();
+}
+
+/* ------------------------------------------------------------------ Ortsnamen */
+// Orte ab 500 Einwohnern (GeoNames), nach Einwohnerzahl sortiert. Je weiter hineingezoomt,
+// desto kleinere Orte erscheinen; ein Raster verhindert, dass sich Namen ueberdecken.
+let places = null, placeBox = null, placeRaf = 0;
+async function loadPlaces() {
+  try {
+    const res = await fetch('data/places.json');
+    places = res.ok ? await res.json() : [];
+  } catch (e) { places = []; }
+  drawPlaces();
+}
+function drawPlaces() {
+  if (!map) return;
+  if (!placeBox) {
+    placeBox = el('div', 'places');
+    map.getCanvasContainer().append(placeBox);
+    map.on('move', () => { if (!placeRaf) placeRaf = requestAnimationFrame(() => { placeRaf = 0; drawPlaces(); }); });
   }
-  for (const m of cityMarkers) { if (labelsDown) m.addTo(map); else m.remove(); }
+  if (!tilesDown || !places || !places.length) { placeBox.textContent = ''; return; }
+  const z = map.getZoom();
+  const minPop = z < 5 ? 1e6 : z < 6 ? 400000 : z < 7 ? 150000 : z < 8 ? 50000 : z < 9 ? 20000 : z < 10 ? 8000 : z < 11 ? 3000 : 0;
+  const bb = map.getBounds(), w0 = bb.getWest(), e0 = bb.getEast(), s0 = bb.getSouth(), n0 = bb.getNorth();
+  const used = new Set(), frag = document.createDocumentFragment();
+  let n = 0;
+  for (let i = 0; i < places.length && n < 170; i++) {
+    const p = places[i];
+    if (p[3] < minPop) break;
+    if (p[1] < w0 || p[1] > e0 || p[2] < s0 || p[2] > n0) continue;
+    const pt = map.project([p[1], p[2]]);
+    const gx = Math.floor(pt.x / 96), gy = Math.floor(pt.y / 24);
+    if (used.has(`${gx},${gy}`) || used.has(`${gx + 1},${gy}`)) continue;
+    used.add(`${gx},${gy}`); used.add(`${gx + 1},${gy}`);
+    const d = el('div', `city place${p[3] >= 100000 ? ' big' : p[3] >= 20000 ? ' mid' : ''}`);
+    d.style.transform = `translate(${Math.round(pt.x) - 3}px, ${Math.round(pt.y) - 8}px)`;
+    d.append(el('span', 'city-dot'), el('span', null, p[0]));
+    frag.append(d);
+    n++;
+  }
+  placeBox.replaceChildren(frag);
 }
 function applyBasemap() {
   const b = state.basemap, th = THEMES[b];
@@ -1460,6 +1496,7 @@ async function init() {
   await Promise.race([regionsLoad, new Promise((r) => setTimeout(r, 7000))]);
   await mapReady;
   map.addLayer(fireLayer, 'labels-dark');
+  loadPlaces();
   map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.07 } });
   map.addLayer({ id: 'area-halo', type: 'line', source: 'area', paint: { 'line-color': '#000000', 'line-width': 4, 'line-opacity': 0.55 } });
