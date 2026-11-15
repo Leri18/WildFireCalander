@@ -337,3 +337,10 @@ dialog.cal-dlg { width: min(940px, calc(100vw - 32px)); max-height: calc(100vh -
   .cal-grid { grid-template-columns: 34px repeat(12, minmax(0, 1fr)); }
   .cg-sum { display: none; }
 }
+
+/* ------------------------------------------------------------------ Eigene Flaeche */
+.area-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.area-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-weight: 600; }
+.area-btn:hover { border-color: var(--accent); }
+.area-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+body.drawing #map { cursor: crosshair; }

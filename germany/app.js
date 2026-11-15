@@ -4,6 +4,7 @@
 const HDR = 16, REC = 28, DAY = 1440;
 const EPOCH_MS = Date.UTC(2000, 0, 1);
 const DE_BOUNDS = [[5.87, 47.27], [15.04, 55.06]];
+const NASA_TILES = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg';
 const GISCO = 'https://gisco-services.ec.europa.eu/distribution/v2/nuts/distribution/';
 
 const SOURCES = {
@@ -104,19 +105,20 @@ const state = {
   t0: 0, t1: 0, v0: 0, v1: 0, full0: 0, full1: 0,
   src: {}, groups: GROUPS.map((g) => g.on), conf: [false, false, true], frpMin: 0, dn: 0,
   region: -2,            // -2 ganzes Rechteck, -1 Deutschland, 0..15 Bundesland
-  color: 'frp', basemap: 'dark', preset: '365', playing: false,
+  area: null,            // [West, Sued, Ost, Nord] der selbst gezogenen Flaeche (region -3)
+  color: 'frp', basemap: 'sat', preset: '365', playing: false,
 };
 const data = [];
 const ui = {};
 let manifest = null, map = null, tl = null, regions = null, stats = null, hist = null, F = null;
 
 try {
-  const saved = JSON.parse(localStorage.getItem('feuerkarte') || '{}');
+  const saved = JSON.parse(localStorage.getItem('feuerkarte2') || '{}');
   if (THEMES[saved.basemap]) state.basemap = saved.basemap;
   if (['frp', 'time', 'type'].includes(saved.color)) state.color = saved.color;
 } catch (e) { /* ohne Speicher laeuft es genauso */ }
 function savePrefs() {
-  try { localStorage.setItem('feuerkarte', JSON.stringify({ basemap: state.basemap, color: state.color })); } catch (e) { /* egal */ }
+  try { localStorage.setItem('feuerkarte2', JSON.stringify({ basemap: state.basemap, color: state.color })); } catch (e) { /* egal */ }
 }
 
 /* ------------------------------------------------------------------ Daten laden */
@@ -139,14 +141,19 @@ async function loadSource(fam, meta, ver) {
 function compileFilter() {
   F = {
     tm: CODE_GROUP.map((g) => state.groups[g]), conf: [state.conf[0], state.conf[1], state.conf[2], true],
-    dn: state.dn, frpMin: state.frpMin, region: state.region,
+    dn: state.dn, frpMin: state.frpMin, region: state.region, area: state.area || [0, 0, 0, 0],
   };
+}
+function inArea(lon, lat) {
+  const a = F.area;
+  return lon >= a[0] && lon <= a[2] && lat >= a[1] && lat <= a[3];
 }
 function passes(src, i) {
   const o = i * REC, flags = src.u8[o + 21];
   if (!F.tm[(flags >> 3) & 7] || !F.conf[(flags >> 1) & 3]) return false;
   if (F.dn && !(flags & 64) && ((flags & 1) === 1) !== (F.dn === 2)) return false;
   if (F.frpMin > 0 && !(src.f32[i * 7 + 2] >= F.frpMin)) return false;
+  if (F.region === -3) return inArea(src.f32[i * 7], src.f32[i * 7 + 1]);
   const reg = src.u8[o + 26];
   return F.region === -2 || (F.region === -1 ? reg !== 255 : reg === F.region);
 }
@@ -168,7 +175,7 @@ function computeStats() {
       const frp = f32[i * 7 + 2];
       if (frpMin > 0 && !(frp >= frpMin)) continue;
       const reg = u8[o + 26];
-      const pR = region === -2 || (region === -1 ? reg !== 255 : reg === region);
+      const pR = region === -3 ? inArea(f32[i * 7], f32[i * 7 + 1]) : region === -2 || (region === -1 ? reg !== 255 : reg === region);
       const g = CODE_GROUP[(flags >> 3) & 7], pT = state.groups[g];
       if (pT && pR) nSrc++;
       if (!on) continue;
@@ -564,6 +571,7 @@ attribute vec4 a_meta2;
 uniform mat4 u_matrix;
 uniform float u_world, u_dpr, u_day0, u_dn, u_region, u_frpMin, u_mode, u_minSize, u_alpha;
 uniform vec2 u_win;
+uniform vec4 u_area;
 uniform float u_types[8];
 uniform float u_conf[4];
 uniform vec3 u_ramp[6];
@@ -583,7 +591,9 @@ void main() {
   if (u_types[int(typ + 0.5)] < 0.5 || u_conf[int(cls + 0.5)] < 0.5) ok = false;
   if (u_dn > 0.5 && dnUnknown < 0.5 && ((night > 0.5) != (u_dn > 1.5))) ok = false;
   float reg = a_meta2.z;
-  if (u_region > -1.5) {
+  if (u_region < -2.5) {
+    if (a_pos.x < u_area.x || a_pos.x > u_area.z || a_pos.y < u_area.y || a_pos.y > u_area.w) ok = false;
+  } else if (u_region > -1.5) {
     if (u_region < -0.5) { if (reg > 254.5) ok = false; }
     else if (abs(reg - u_region) > 0.5) ok = false;
   }
@@ -669,7 +679,7 @@ const fireLayer = {
     for (const a of ['a_pos', 'a_frp', 'a_time', 'a_meta', 'a_meta2']) this.at[a] = gl.getAttribLocation(p, a);
     this.un = {};
     for (const u of ['u_matrix', 'u_world', 'u_dpr', 'u_day0', 'u_dn', 'u_region', 'u_frpMin', 'u_mode', 'u_minSize', 'u_alpha',
-      'u_win', 'u_types', 'u_conf', 'u_ramp', 'u_typeColor', 'u_noData', 'u_ring']) this.un[u] = gl.getUniformLocation(p, u);
+      'u_win', 'u_area', 'u_types', 'u_conf', 'u_ramp', 'u_typeColor', 'u_noData', 'u_ring']) this.un[u] = gl.getUniformLocation(p, u);
     for (const s of data) { s.glBuf = null; s.dirty = true; }
   },
   render(gl, arg) {
@@ -694,6 +704,7 @@ const fireLayer = {
     gl.uniform2f(un.u_win, state.t0 - day0 * DAY, state.t1 - day0 * DAY);
     gl.uniform1f(un.u_dn, F.dn);
     gl.uniform1f(un.u_region, F.region);
+    gl.uniform4f(un.u_area, F.area[0], F.area[1], F.area[2], F.area[3]);
     gl.uniform1f(un.u_frpMin, F.frpMin);
     gl.uniform1f(un.u_mode, mode);
     gl.uniform1f(un.u_minSize, st.minSize);
@@ -944,6 +955,8 @@ function initMap() {
   const esri = (path) => [`https://server.arcgisonline.com/ArcGIS/rest/services/${path}/MapServer/tile/{z}/{y}/{x}`];
   const esriAttr = '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende';
   const satAttr = 'Satellitenbild: © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics';
+  // Weltweites Satellitenbild der NASA (Blue Marble, 500 m), liegt unter dem hochaufgeloesten Bild
+  const nasaAttr = 'Satellitenbild: NASA Blue Marble (GIBS)';
   const rs = (tiles, attribution, maxzoom) => ({ type: 'raster', tiles, tileSize: 256, attribution, maxzoom });
   const hid = { visibility: 'none' };
   const style = {
@@ -953,12 +966,14 @@ function initMap() {
       'labels-dark': rs(esri('Canvas/World_Dark_Gray_Reference'), '', 16),
       'base-light': rs(esri('Canvas/World_Light_Gray_Base'), esriAttr, 16),
       'labels-light': rs(esri('Canvas/World_Light_Gray_Reference'), '', 16),
+      'sat-nasa': rs([NASA_TILES], nasaAttr, 8),
       'sat-blue': rs(esri('World_Imagery'), satAttr, 19),
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#0d0d0d' } },
       { id: 'base-dark', type: 'raster', source: 'base-dark' },
       { id: 'base-light', type: 'raster', source: 'base-light', layout: hid },
+      { id: 'sat-nasa', type: 'raster', source: 'sat-nasa', layout: hid },
       { id: 'sat-blue', type: 'raster', source: 'sat-blue', layout: hid },
       { id: 'labels-dark', type: 'raster', source: 'labels-dark' },
       { id: 'labels-light', type: 'raster', source: 'labels-light', layout: hid },
@@ -966,7 +981,7 @@ function initMap() {
   };
   map = new maplibregl.Map({
     container: 'map', style, bounds: DE_BOUNDS, fitBoundsOptions: { padding: mapPadding() },
-    minZoom: 3.5, maxZoom: 16, maxBounds: [[-25, 30], [45, 68]], attributionControl: false,
+    minZoom: 1, maxZoom: 16, attributionControl: false,
     dragRotate: false, pitchWithRotate: false, touchPitch: false,
   });
   map.touchZoomRotate.disableRotation();
@@ -1035,7 +1050,7 @@ let tilesDown = false, cityMarkers = null;
 function checkTiles() {
   const b = state.basemap;
   const isDown = (id) => { const st = tileStat[id]; return !!st && st.ok === 0 && st.err >= 3; };
-  const baseDown = isDown(b === 'light' ? 'base-light' : b === 'sat' ? 'sat-blue' : 'base-dark');
+  const baseDown = b === 'sat' ? isDown('sat-blue') && isDown('sat-nasa') : isDown(b === 'light' ? 'base-light' : 'base-dark');
   const labelsDown = isDown(b === 'light' ? 'labels-light' : 'labels-dark');
   notice('tiles', baseDown ? 'Die Hintergrundkarte ist gerade nicht erreichbar. Gezeigt wird eine vereinfachte Karte aus den Ländergrenzen.' : '');
   if (labelsDown === tilesDown) return;
@@ -1057,6 +1072,7 @@ function applyBasemap() {
   vis('labels-dark', b !== 'light');
   vis('base-light', b === 'light');
   vis('labels-light', b === 'light');
+  vis('sat-nasa', b === 'sat');
   vis('sat-blue', b === 'sat');
   map.setPaintProperty('bg', 'background-color', th.sea);
   if (map.getLayer('de-mask')) {
@@ -1179,14 +1195,108 @@ function buildUI() {
     requestAnimationFrame(() => { tl.resize(); invalidate(HIST); });
   });
   $('#tableBtn').addEventListener('click', openTable);
+  $('#csvBtn').addEventListener('click', exportCsv);
   $('#tableClose').addEventListener('click', () => $('#tableDlg').close());
 }
+/* ------------------------------------------------------------------ Eigene Flaeche */
+// Rechteck auf der Karte aufziehen. Solange es besteht, zeigen Karte, Kennzahlen, Zeitleiste,
+// Kalender und CSV-Export nur Detektionen innerhalb dieser Flaeche (region -3).
+function areaFeature(a) {
+  return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[a[0], a[1]], [a[2], a[1]], [a[2], a[3]], [a[0], a[3]], [a[0], a[1]]]] } };
+}
+function showArea(a) {
+  const src = map.getSource('area');
+  if (src) src.setData({ type: 'FeatureCollection', features: a ? [areaFeature(a)] : [] });
+}
+function areaText(a) {
+  const f = (v, pos, neg) => `${nf2.format(Math.abs(v))}° ${v >= 0 ? pos : neg}`;
+  return `${f(a[1], 'N', 'S')} bis ${f(a[3], 'N', 'S')}, ${f(a[0], 'O', 'W')} bis ${f(a[2], 'O', 'W')}`;
+}
+function setArea(a) {
+  state.area = a;
+  const sel = ui.regionSel;
+  let opt = sel.querySelector('option[value="-3"]');
+  if (a && !opt) { opt = new Option('Eigene Fläche', '-3'); sel.append(opt); }
+  if (!a && opt) opt.remove();
+  showArea(a);
+  $('#areaClear').hidden = !a;
+  $('#areaHint').textContent = a ? `Gewählt: ${areaText(a)}.` : 'Rechteck auf der Karte aufziehen; danach zählt nur, was darin liegt.';
+  selectRegion(a ? -3 : (regions ? -1 : -2), false);
+}
+function bindAreaTool() {
+  const btn = $('#areaDraw');
+  let drawing = false, start = null;
+  const stop = () => {
+    drawing = false; start = null;
+    document.body.classList.remove('drawing');
+    btn.setAttribute('aria-pressed', 'false');
+    map.dragPan.enable();
+    map.getCanvas().style.cursor = '';
+  };
+  btn.addEventListener('click', () => {
+    if (drawing) { stop(); showArea(state.area); return; }
+    drawing = true;
+    document.body.classList.add('drawing');
+    btn.setAttribute('aria-pressed', 'true');
+    map.dragPan.disable();
+    map.getCanvas().style.cursor = 'crosshair';
+    closeDetail();
+  });
+  $('#areaClear').addEventListener('click', () => setArea(null));
+  const box = (a, b) => [Math.min(a.lng, b.lng), Math.min(a.lat, b.lat), Math.max(a.lng, b.lng), Math.max(a.lat, b.lat)];
+  const down = (e) => { if (!drawing) return; e.preventDefault(); start = e.lngLat; };
+  const move = (e) => { if (drawing && start) showArea(box(start, e.lngLat)); };
+  const up = (e) => {
+    if (!drawing || !start) return;
+    const a = box(start, e.lngLat);
+    stop();
+    if (a[2] - a[0] < 0.01 || a[3] - a[1] < 0.01) { showArea(state.area); return; }   // nur ein Klick
+    setArea(a);
+  };
+  map.on('mousedown', down); map.on('mousemove', move); map.on('mouseup', up);
+  map.on('touchstart', down); map.on('touchmove', move); map.on('touchend', up);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawing) { stop(); showArea(state.area); } });
+}
+
+/* ------------------------------------------------------------------ CSV-Export */
+// Alle Detektionen, die gerade gezeigt werden: Zeitfenster, Filter, Sensoren und Gebiet.
+function exportCsv() {
+  const out = ['latitude,longitude,acq_date,acq_time_utc,sensor,satellite,frp_mw,confidence_percent,confidence_class,daynight,source_type,data_quality,version'];
+  const cls = ['low', 'nominal', 'high', ''];
+  const typ = ['unclassified', 'vegetation_fire', 'volcano', 'static_land_source', 'offshore', 'static_derived', '', ''];
+  let n = 0;
+  for (const src of data) {
+    if (!state.src[src.fam]) continue;
+    const { f32, u16, u8 } = src;
+    for (let i = src.a; i < src.b; i++) {
+      if (!passes(src, i)) continue;
+      const o = i * REC, flags = u8[o + 21];
+      const d = new Date(EPOCH_MS + u16[i * 14 + 6] * 86400000).toISOString().slice(0, 10);
+      const m = u16[i * 14 + 7];
+      const hhmm = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      const frp = f32[i * 7 + 2];
+      out.push([f32[i * 7 + 1].toFixed(5), f32[i * 7].toFixed(5), d, hhmm, src.fam, src.meta.sat[u8[o + 24]] || '',
+        frp >= 0 ? frp.toFixed(2) : '', u8[o + 20] === 255 ? '' : u8[o + 20], cls[(flags >> 1) & 3],
+        flags & 64 ? '' : (flags & 1 ? 'N' : 'D'), typ[(flags >> 3) & 7], flags & 128 ? 'NRT' : 'SP', src.meta.ver[u8[o + 25]] || ''].join(','));
+      n++;
+    }
+  }
+  const day = (t) => new Date(msOf(t)).toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([out.join('\n') + '\n'], { type: 'text/csv' }));
+  a.download = `firms_hotspots_${day(state.t0)}_${day(state.t1 - 1)}_${n}.csv`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
 function selectRegion(r, fit) {
   state.region = r;
   ui.regionSel.value = String(r);
   if (map.getLayer('de-sel')) map.setFilter('de-sel', ['==', ['get', 'NUTS_ID'], r >= 0 ? REGIONS[r][0] : '']);
   filtersChanged();
-  if (fit && regions) map.fitBounds(r >= 0 ? regions.bounds[r] : DE_BOUNDS, { padding: mapPadding(), maxZoom: 10, duration: 700 });
+  if (fit && regions && r !== -3) map.fitBounds(r >= 0 ? regions.bounds[r] : DE_BOUNDS, { padding: mapPadding(), maxZoom: 10, duration: 700 });
 }
 function regionsReady() {
   const sel = ui.regionSel;
@@ -1341,6 +1451,11 @@ async function init() {
   await Promise.race([regionsLoad, new Promise((r) => setTimeout(r, 7000))]);
   await mapReady;
   map.addLayer(fireLayer, 'labels-dark');
+  map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.07 } });
+  map.addLayer({ id: 'area-halo', type: 'line', source: 'area', paint: { 'line-color': '#000000', 'line-width': 4, 'line-opacity': 0.55 } });
+  map.addLayer({ id: 'area-line', type: 'line', source: 'area', paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [2, 1.5] } });
+  bindAreaTool();
   applyBasemap();
   if (regions) regionsReady();
   else regionsLoad.then(() => { if (regions) regionsReady(); });

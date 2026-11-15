@@ -61,6 +61,11 @@
   <section>
     <h2>Gebiet</h2>
     <select id="regionSel" aria-label="Gebiet"></select>
+    <div class="area-tools">
+      <button type="button" class="area-btn" id="areaDraw" aria-pressed="false">Fläche auswählen</button>
+      <button type="button" class="text-btn" id="areaClear" hidden>Auswahl aufheben</button>
+    </div>
+    <p class="hint" id="areaHint">Rechteck auf der Karte aufziehen; danach zählt nur, was darin liegt.</p>
     <div class="ranks" id="regionRanks" aria-label="Detektionen nach Bundesland"></div>
   </section>
 
@@ -131,6 +136,7 @@
       </button>
       <button type="button" class="text-btn" id="viewAll" title="Zeitleiste wieder auf den gesamten Zeitraum stellen">Gesamte Zeitleiste</button>
       <button type="button" class="text-btn" id="tableBtn" title="Werte der Zeitleiste als Tabelle zeigen">Tabelle</button>
+      <button type="button" class="text-btn" id="csvBtn" title="Die gezeigten Detektionen als CSV-Datei speichern">CSV</button>
     </div>
   </div>
   <div class="tl-plot">
